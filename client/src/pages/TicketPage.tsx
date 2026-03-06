@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
-import { CheckCircle2, XCircle, Clock, MapPin, Calendar, Timer, User, Ticket } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, MapPin, Calendar, Timer, User, Ticket, Download, Share2 } from "lucide-react";
 
 export default function TicketPage() {
   const params = useParams<{ slug: string }>();
+  const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const { data, isLoading, error } = useQuery<{ ticket: any; event: any }>({
     queryKey: ["/api/ticket", params.slug],
@@ -40,16 +43,46 @@ export default function TicketPage() {
   const status = statusConfig[ticket.status] || statusConfig.valid;
   const StatusIcon = status.icon;
 
+  const handleDownloadPDF = async () => {
+    setDownloading(true);
+    try {
+      window.open(`/api/ticket/${params.slug}/pdf`, "_blank");
+    } finally {
+      setTimeout(() => setDownloading(false), 1500);
+    }
+  };
+
+  const handleShare = async () => {
+    const shareData = {
+      title: `${event?.name || "Event Ticket"} — Matcha On Ice`,
+      text: `My ticket for ${event?.name || "the event"}`,
+      url: window.location.href,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (_) {}
+    } else {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (_) {}
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4" data-testid="ticket-page">
       <div className="w-full max-w-md space-y-4">
         <div className="rounded-3xl border border-card-border bg-card shadow-card overflow-hidden">
+
           <div className="bg-primary p-6 text-center">
             <Ticket className="h-8 w-8 text-primary-foreground mx-auto mb-2" />
             <h1 className="text-xl font-semibold text-primary-foreground" data-testid="text-event-name">
               {event?.name || "Event Ticket"}
             </h1>
-            <p className="text-primary-foreground/80 text-sm mt-1">Matcha On Ice</p>
+            <p className="text-primary-foreground/80 text-sm mt-1">Matcha On Ice · San Diego, CA</p>
           </div>
 
           <div className="p-6 space-y-5">
@@ -63,7 +96,7 @@ export default function TicketPage() {
                 <img
                   src={ticket.qrCode}
                   alt="Ticket QR Code"
-                  className="w-64 h-64 rounded-2xl border border-card-border"
+                  className="w-72 h-72 rounded-2xl border border-card-border"
                 />
               </div>
             )}
@@ -86,7 +119,7 @@ export default function TicketPage() {
 
               {event && (
                 <>
-                  <div className="h-px bg-border" />
+                  <div className="h-px border-t border-dashed border-border" />
                   <div className="flex items-center gap-3 text-sm">
                     <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                     <span className="text-muted-foreground">Date</span>
@@ -105,7 +138,7 @@ export default function TicketPage() {
                 </>
               )}
 
-              <div className="h-px bg-border" />
+              <div className="h-px border-t border-dashed border-border" />
               <div className="flex items-center gap-3 text-sm">
                 <Ticket className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 <span className="text-muted-foreground">Type</span>
@@ -116,9 +149,42 @@ export default function TicketPage() {
             </div>
           </div>
 
+          {ticket.status === "valid" && (
+            <div className="px-6 pb-6 space-y-3">
+              <div className="h-px border-t border-dashed border-border mb-4" />
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={handleDownloadPDF}
+                  disabled={downloading}
+                  className="flex items-center justify-center gap-2 bg-primary text-primary-foreground py-3 rounded-2xl font-medium text-sm shadow-soft hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-70"
+                  data-testid="button-download-pdf"
+                >
+                  <Download className="h-4 w-4" />
+                  {downloading ? "Opening..." : "Download PDF"}
+                </button>
+
+                <button
+                  onClick={handleShare}
+                  className="flex items-center justify-center gap-2 border border-card-border bg-card text-foreground py-3 rounded-2xl font-medium text-sm hover:bg-muted/30 active:scale-95 transition-all"
+                  data-testid="button-share"
+                >
+                  <Share2 className="h-4 w-4" />
+                  {copied ? "Copied!" : "Share"}
+                </button>
+              </div>
+
+              {copied && (
+                <p className="text-center text-xs text-status-online" data-testid="text-copied-feedback">
+                  Link copied to clipboard!
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="px-6 pb-6">
             <p className="text-center text-xs text-muted-foreground">
-              Ticket ID: {ticket.id.slice(0, 8)}...
+              Ticket ID: {ticket.id.slice(0, 8).toUpperCase()}...
             </p>
           </div>
         </div>

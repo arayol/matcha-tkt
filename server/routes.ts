@@ -2,6 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { generateTicketQR } from "./qrcode";
+import { generateTicketPDF } from "./pdfGenerator";
 import { insertTicketSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -141,6 +142,25 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       res.json({ message: "Courtesy ticket created", ticket });
     } catch (err) {
       res.status(500).json({ error: "Failed to create courtesy ticket" });
+    }
+  });
+
+  app.get("/api/ticket/:urlSlug/pdf", async (req, res) => {
+    try {
+      const ticket = await storage.getTicketByUrl(req.params.urlSlug);
+      if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+      if (ticket.status === "cancelled") return res.status(400).json({ error: "Ticket is cancelled" });
+
+      const event = ticket.eventId ? await storage.getEvent(ticket.eventId) : undefined;
+      const pdfBuffer = await generateTicketPDF(ticket, event);
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="ticket-${req.params.urlSlug}.pdf"`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.send(pdfBuffer);
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      res.status(500).json({ error: "Failed to generate PDF" });
     }
   });
 

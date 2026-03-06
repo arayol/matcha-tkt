@@ -3,13 +3,14 @@
 ## About
 Ticket management system for fitness events in San Diego, CA. Includes Stripe integration for automated sales, QR codes, unique ticket URLs, admin dashboard, and courtesy ticket generation.
 
-## Status: Marco M2 - PWA Scanner ✅
+## Status: Marco M3 - Sistema de Ingressos ✅
 - **M1 complete:** DB schema, QR codes, webhooks, API routes, ticket page, dashboard
-- **M2 complete:** PWA manifest, scanner page at `/scan`, validate-qr API integration
-  - Mobile-first design (400px), all scan states (idle/scanning/loading/success/error)
-  - Haptic feedback via navigator.vibrate()
-  - Atomic ticket validation (race-condition safe)
-  - "Add to Home Screen" ready (manifest.json, apple-mobile-web-app-capable)
+- **M2 complete:** PWA scanner at `/scan`, camera QR validation, haptic feedback
+- **M3 complete:** PDF ticket download, Share button (Web Share API + clipboard fallback)
+  - Server-side PDF via pdfkit with QR code embedded, event info, branding
+  - Download PDF button (valid tickets only) → GET /api/ticket/:slug/pdf
+  - Share button: native share sheet on mobile, clipboard copy on desktop
+  - Dashed divider styling on ticket page, larger QR code (288px)
 
 ## Architecture
 - **Frontend:** React + TypeScript + Vite + Tailwind CSS + shadcn/ui + wouter (routing) + TanStack Query
@@ -24,6 +25,7 @@ Ticket management system for fitness events in San Diego, CA. Includes Stripe in
 - `server/webhookHandlers.ts` — Webhook processing, creates tickets on checkout.session.completed
 - `server/routes.ts` — API routes (events, tickets, validation, courtesy, stats)
 - `server/qrcode.ts` — QR code generation utility
+- `server/pdfGenerator.ts` — PDF ticket generation via pdfkit (with QR code embedded)
 - `server/storage.ts` — DatabaseStorage with full CRUD for events/tickets
 - `server/db.ts` — PostgreSQL connection via drizzle-orm
 - `shared/schema.ts` — Database schema (users, events, tickets)
