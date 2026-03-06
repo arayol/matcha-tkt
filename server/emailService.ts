@@ -2,6 +2,18 @@
 // Uses getUncachableGmailClient() — never cache, tokens expire
 import { google } from "googleapis";
 import { generateTicketPDF } from "./pdfGenerator";
+import * as fs from "fs";
+import * as path from "path";
+
+const LOGO_DATA_URI = (() => {
+  try {
+    const logoPath = path.join(process.cwd(), "server", "matcha-logo.png");
+    const buf = fs.readFileSync(logoPath);
+    return `data:image/png;base64,${buf.toString("base64")}`;
+  } catch {
+    return "";
+  }
+})();
 
 let connectionSettings: any;
 
@@ -111,80 +123,145 @@ function buildTicketEmailHtml(params: {
   ticketUrl: string;
   isCourtesy: boolean;
 }) {
-  const baseUrl = process.env.REPL_SLUG
+  const baseUrl = process.env.REPLIT_DEV_DOMAIN
+    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+    : process.env.REPL_SLUG
     ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
     : "http://localhost:5000";
 
   const fullTicketUrl = `${baseUrl}/ticket/${params.ticketUrl}`;
+  const firstName = params.name.split(" ")[0];
+
+  const logoImg = LOGO_DATA_URI
+    ? `<img src="${LOGO_DATA_URI}" alt="Matcha On Ice Social Club" style="width:220px;max-width:100%;filter:invert(1) brightness(2);position:relative;z-index:1;" />`
+    : `<div style="font-family:'Georgia',serif;font-size:28px;color:#fff;font-weight:300;letter-spacing:1px;"><em>Matcha</em> On Ice<div style="font-size:12px;letter-spacing:4px;font-weight:300;margin-top:4px;opacity:0.6;">SOCIAL CLUB</div></div>`;
+
+  const logoFooterImg = LOGO_DATA_URI
+    ? `<img src="${LOGO_DATA_URI}" alt="Matcha On Ice" style="width:160px;filter:invert(1) brightness(2);opacity:0.7;margin-bottom:20px;" />`
+    : `<div style="font-family:'Georgia',serif;font-size:20px;color:rgba(255,255,255,0.6);font-weight:300;margin-bottom:16px;"><em>Matcha</em> On Ice</div>`;
 
   return `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#f5f4f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f4f9;padding:40px 20px;">
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Ticket is Confirmed – Matcha On Ice</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0ede6;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#2a2520;-webkit-font-smoothing:antialiased;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0ede6;padding:40px 20px;">
     <tr><td align="center">
-      <table width="100%" style="max-width:560px;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background-color:#faf9f6;border-radius:2px;overflow:hidden;box-shadow:0 4px 40px rgba(42,37,32,0.10);">
+
+        <!-- HEADER -->
         <tr>
-          <td style="background:linear-gradient(135deg,#7c5cbf 0%,#9b7de8 100%);padding:36px 40px;text-align:center;">
-            <div style="font-size:32px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Matcha On Ice</div>
-            <div style="font-size:14px;color:rgba(255,255,255,0.8);margin-top:6px;">San Diego, CA</div>
+          <td style="background-color:#2a2520;padding:48px 48px 40px;text-align:center;">
+            ${logoImg}
+            <div style="width:40px;height:1px;background:rgba(122,153,86,0.6);margin:24px auto 0;"></div>
           </td>
         </tr>
-        <tr>
-          <td style="padding:36px 40px;">
-            <p style="margin:0 0 8px;font-size:16px;color:#6b7280;">Hello,</p>
-            <h1 style="margin:0 0 24px;font-size:26px;font-weight:700;color:#1a1a2e;line-height:1.2;">
-              Your ticket is confirmed${params.isCourtesy ? " (Courtesy)" : ""}! 🎉
-            </h1>
 
-            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f7fc;border-radius:16px;padding:24px;margin-bottom:28px;">
-              <tr><td style="padding-bottom:14px;border-bottom:1px dashed #e0d9f5;">
-                <div style="font-size:11px;font-weight:600;color:#9b7de8;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;">Event</div>
-                <div style="font-size:17px;font-weight:600;color:#1a1a2e;">${params.eventName}</div>
-              </td></tr>
-              <tr><td style="padding:14px 0;border-bottom:1px dashed #e0d9f5;">
-                <table width="100%"><tr>
-                  <td width="50%">
-                    <div style="font-size:11px;font-weight:600;color:#9b7de8;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;">Date</div>
-                    <div style="font-size:15px;font-weight:500;color:#1a1a2e;">${params.eventDate}</div>
-                  </td>
-                  <td width="50%">
-                    <div style="font-size:11px;font-weight:600;color:#9b7de8;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;">Time</div>
-                    <div style="font-size:15px;font-weight:500;color:#1a1a2e;">${params.eventTime}</div>
-                  </td>
+        <!-- HERO BAND -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#7a9956 0%,#5c7a3e 100%);padding:32px 48px;text-align:center;">
+            <div style="font-size:11px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.7);margin-bottom:10px;">Booking Confirmed</div>
+            <div style="font-family:Georgia,serif;font-size:38px;font-weight:300;color:#ffffff;line-height:1.1;letter-spacing:0.5px;">Your ticket is<br><em>confirmed.</em></div>
+            <div style="width:44px;height:44px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.5);display:inline-block;margin:16px auto 0;line-height:44px;text-align:center;">
+              <span style="color:#fff;font-size:18px;">&#10003;</span>
+            </div>
+          </td>
+        </tr>
+
+        <!-- BODY -->
+        <tr>
+          <td style="padding:48px 48px 0;text-align:center;">
+
+            <div style="font-family:Georgia,serif;font-size:22px;font-weight:300;color:#2a2520;margin-bottom:6px;text-align:center;">Hello, ${firstName},</div>
+            <div style="display:block;font-size:13px;font-weight:400;letter-spacing:1.5px;text-transform:uppercase;color:#7a9956;margin-bottom:32px;border-bottom:1px solid #d5cfc4;padding-bottom:20px;text-align:center;">${params.eventName}</div>
+
+            <!-- TICKET CARD -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#2a2520;border-radius:2px;overflow:hidden;margin-bottom:36px;border-top:3px solid #7a9956;">
+              <tr>
+                <td style="padding:28px 32px 20px;border-bottom:1px dashed rgba(255,255,255,0.1);">
+                  <div style="font-family:Georgia,serif;font-size:26px;font-weight:400;color:#ffffff;letter-spacing:0.3px;line-height:1.2;text-align:center;">${params.eventName}</div>
+                  <div style="text-align:center;margin-top:10px;">
+                    <span style="display:inline-block;padding:4px 14px;background:rgba(122,153,86,0.2);border:1px solid rgba(122,153,86,0.4);border-radius:20px;font-size:11px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:#a3bf7a;">${params.ticketType}</span>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:24px 32px;">
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td width="33%" style="padding-right:16px;vertical-align:top;text-align:center;">
+                        <div style="font-size:9px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.35);margin-bottom:6px;">Date</div>
+                        <div style="font-family:Georgia,serif;font-size:20px;font-weight:400;color:#ffffff;line-height:1.2;">${params.eventDate}</div>
+                      </td>
+                      <td width="33%" style="padding-right:16px;vertical-align:top;text-align:center;">
+                        <div style="font-size:9px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.35);margin-bottom:6px;">Time</div>
+                        <div style="font-family:Georgia,serif;font-size:20px;font-weight:400;color:#ffffff;line-height:1.2;">${params.eventTime}</div>
+                      </td>
+                      <td width="33%" style="vertical-align:top;text-align:center;">
+                        <div style="font-size:9px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.35);margin-bottom:6px;">Location</div>
+                        <div style="font-family:Georgia,serif;font-size:20px;font-weight:400;color:#ffffff;line-height:1.2;">${params.eventLocation}</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              <tr>
+                <td style="background:rgba(0,0,0,0.2);padding:16px 32px;text-align:center;">
+                  <div style="font-size:12px;font-weight:300;color:rgba(255,255,255,0.45);line-height:1.5;">
+                    Your QR code is attached to this email as a PDF ticket.<br>
+                    Present it at the entrance for quick check-in.
+                  </div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- INSTRUCTIONS -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:36px;">
+              <tr><td style="padding:16px 0;border-top:1px solid #ede8df;border-bottom:1px solid #ede8df;">
+                <table cellpadding="0" cellspacing="0"><tr>
+                  <td style="width:28px;height:28px;border-radius:50%;border:1px solid #7a9956;text-align:center;vertical-align:middle;font-size:11px;font-weight:600;color:#7a9956;padding:0 8px;">1</td>
+                  <td style="padding-left:16px;font-size:14px;font-weight:300;color:#5a5248;line-height:1.6;"><strong style="font-weight:500;color:#2a2520;">Save your ticket.</strong> Your ticket PDF is attached to this email. You can also view it online anytime by clicking the button below.</td>
                 </tr></table>
               </td></tr>
-              <tr><td style="padding:14px 0;border-bottom:1px dashed #e0d9f5;">
-                <div style="font-size:11px;font-weight:600;color:#9b7de8;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;">Location</div>
-                <div style="font-size:15px;font-weight:500;color:#1a1a2e;">${params.eventLocation}</div>
+              <tr><td style="padding:16px 0;border-bottom:1px solid #ede8df;">
+                <table cellpadding="0" cellspacing="0"><tr>
+                  <td style="width:28px;height:28px;border-radius:50%;border:1px solid #7a9956;text-align:center;vertical-align:middle;font-size:11px;font-weight:600;color:#7a9956;padding:0 8px;">2</td>
+                  <td style="padding-left:16px;font-size:14px;font-weight:300;color:#5a5248;line-height:1.6;"><strong style="font-weight:500;color:#2a2520;">Show your QR code at the door.</strong> Our team will scan it at the entrance for quick and seamless check-in.</td>
+                </tr></table>
               </td></tr>
-              <tr><td style="padding-top:14px;">
-                <div style="font-size:11px;font-weight:600;color:#9b7de8;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;">Ticket Type</div>
-                <div style="display:inline-block;background:#ede9f8;color:#7c5cbf;font-size:13px;font-weight:600;padding:4px 14px;border-radius:20px;">${params.ticketType}</div>
+              <tr><td style="padding:16px 0;border-bottom:1px solid #ede8df;">
+                <table cellpadding="0" cellspacing="0"><tr>
+                  <td style="width:28px;height:28px;border-radius:50%;border:1px solid #7a9956;text-align:center;vertical-align:middle;font-size:11px;font-weight:600;color:#7a9956;padding:0 8px;">3</td>
+                  <td style="padding-left:16px;font-size:14px;font-weight:300;color:#5a5248;line-height:1.6;"><strong style="font-weight:500;color:#2a2520;">Questions?</strong> Simply reply to this email and we'll be happy to help.</td>
+                </tr></table>
               </td></tr>
             </table>
 
-            <p style="margin:0 0 20px;font-size:14px;color:#6b7280;line-height:1.6;">
-              Your ticket PDF is attached to this email. You can also view it online anytime:
-            </p>
+            <!-- CTA -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="padding:8px 0 36px;">
+              <tr><td align="center">
+                <a href="${fullTicketUrl}" style="display:inline-block;padding:14px 40px;background:#7a9956;color:#ffffff;text-decoration:none;font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase;border-radius:1px;">View My Ticket</a>
+              </td></tr>
+            </table>
 
-            <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
-              <a href="${fullTicketUrl}" style="display:inline-block;background:linear-gradient(135deg,#7c5cbf 0%,#9b7de8 100%);color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 36px;border-radius:14px;box-shadow:0 4px 14px rgba(124,92,191,0.35);">
-                View My Ticket
-              </a>
-            </td></tr></table>
-
-            <p style="margin:28px 0 0;font-size:13px;color:#9ca3af;text-align:center;line-height:1.6;">
-              Show the QR code at the entrance for quick check-in.<br>
-              Questions? Reply to this email.
-            </p>
           </td>
         </tr>
+
+        <!-- FOOTER -->
         <tr>
-          <td style="background:#f8f7fc;padding:20px 40px;text-align:center;">
-            <p style="margin:0;font-size:12px;color:#9ca3af;">Matcha On Ice &middot; San Diego, CA</p>
+          <td style="background:#2a2520;padding:36px 48px;text-align:center;">
+            ${logoFooterImg}
+            <div style="width:30px;height:1px;background:rgba(122,153,86,0.3);margin:16px auto;"></div>
+            <div style="font-size:12px;font-weight:300;color:rgba(255,255,255,0.4);line-height:1.8;">
+              Matcha On Ice &middot; San Diego, CA<br/>
+              <a href="mailto:contact@matchaonice.com" style="color:rgba(163,191,122,0.8);text-decoration:none;">contact@matchaonice.com</a>
+            </div>
           </td>
         </tr>
+
       </table>
     </td></tr>
   </table>

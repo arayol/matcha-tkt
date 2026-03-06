@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Ticket is Confirmed – Matcha On Ice</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background-color: #f0ede6;
+      font-family: 'Jost', Helvetica, Arial, sans-serif;
+      color: #2a2520;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .email-wrapper {
+      background-color: #f0ede6;
+      padding: 40px 20px;
+    }
+
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #faf9f6;
+      border-radius: 2px;
+      overflow: hidden;
+      box-shadow: 0 4px 40px rgba(42, 37, 32, 0.10);
+    }
+
+    /* ── HEADER ── */
+    .header {
+      background-color: #2a2520;
+      padding: 48px 48px 40px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: -60px; left: -60px;
+      width: 200px; height: 200px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(122,153,86,0.18) 0%, transparent 70%);
+    }
+
+    .header::after {
+      content: '';
+      position: absolute;
+      bottom: -40px; right: -40px;
+      width: 160px; height: 160px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(122,153,86,0.12) 0%, transparent 70%);
+    }
+
+    .header img.logo {
+      width: 220px;
+      max-width: 100%;
+      filter: invert(1) brightness(2);
+      position: relative;
+      z-index: 1;
+    }
+
+    .header-divider {
+      width: 40px;
+      height: 1px;
+      background: rgba(122,153,86,0.6);
+      margin: 24px auto 0;
+    }
+
+    /* ── HERO BAND ── */
+    .hero-band {
+      background: linear-gradient(135deg, #7a9956 0%, #5c7a3e 100%);
+      padding: 32px 48px;
+      text-align: center;
+    }
+
+    .hero-band .confirmed-label {
+      font-family: 'Jost', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 10px;
+    }
+
+    .hero-band h1 {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 38px;
+      font-weight: 300;
+      color: #ffffff;
+      line-height: 1.1;
+      letter-spacing: 0.5px;
+    }
+
+    .hero-band h1 em {
+      font-style: italic;
+      font-weight: 400;
+    }
+
+    .checkmark {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.5);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin: 16px auto 0;
+    }
+
+    .checkmark svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* ── BODY ── */
+    .body-content {
+      padding: 48px 48px 0;
+    }
+
+    .greeting {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 22px;
+      font-weight: 300;
+      color: #2a2520;
+      margin-bottom: 6px;
+    }
+
+    .event-name-row {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 400;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #7a9956;
+      margin-bottom: 32px;
+      border-bottom: 1px solid #d5cfc4;
+      padding-bottom: 20px;
+      width: 100%;
+    }
+
+    /* ── TICKET CARD ── */
+    .ticket-card {
+      background: #2a2520;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 36px;
+      position: relative;
+    }
+
+    .ticket-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #7a9956, #a3bf7a, #7a9956);
+    }
+
+    .ticket-header {
+      padding: 28px 32px 20px;
+      border-bottom: 1px dashed rgba(255,255,255,0.1);
+    }
+
+    .event-title-ticket {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 26px;
+      font-weight: 400;
+      color: #ffffff;
+      letter-spacing: 0.3px;
+      line-height: 1.2;
+    }
+
+    .ticket-type-badge {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 4px 14px;
+      background: rgba(122,153,86,0.2);
+      border: 1px solid rgba(122,153,86,0.4);
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #a3bf7a;
+    }
+
+    .ticket-details {
+      padding: 24px 32px;
+      display: table;
+      width: 100%;
+    }
+
+    .detail-col {
+      display: table-cell;
+      width: 33.33%;
+      padding-right: 16px;
+      vertical-align: top;
+    }
+
+    .detail-col:last-child { padding-right: 0; }
+
+    .detail-label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.35);
+      margin-bottom: 6px;
+    }
+
+    .detail-value {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 20px;
+      font-weight: 400;
+      color: #ffffff;
+      line-height: 1.2;
+    }
+
+    .ticket-footer {
+      background: rgba(0,0,0,0.2);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .qr-placeholder {
+      width: 48px;
+      height: 48px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .qr-placeholder svg {
+      opacity: 0.4;
+    }
+
+    .ticket-footer-text {
+      font-size: 12px;
+      font-weight: 300;
+      color: rgba(255,255,255,0.45);
+      line-height: 1.5;
+    }
+
+    /* ── INSTRUCTIONS ── */
+    .instructions {
+      margin-bottom: 36px;
+    }
+
+    .instruction-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 16px 0;
+      border-bottom: 1px solid #ede8df;
+    }
+
+    .instruction-item:first-child { border-top: 1px solid #ede8df; }
+
+    .instruction-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid #7a9956;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: #7a9956;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .instruction-text {
+      font-size: 14px;
+      font-weight: 300;
+      color: #5a5248;
+      line-height: 1.6;
+    }
+
+    .instruction-text strong {
+      font-weight: 500;
+      color: #2a2520;
+    }
+
+    /* ── CTA ── */
+    .cta-section {
+      text-align: center;
+      padding: 8px 0 36px;
+    }
+
+    .cta-button {
+      display: inline-block;
+      padding: 14px 40px;
+      background: #7a9956;
+      color: #ffffff !important;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      border-radius: 1px;
+    }
+
+    /* ── FOOTER ── */
+    .footer {
+      background: #2a2520;
+      padding: 36px 48px;
+      text-align: center;
+    }
+
+    .footer img.logo-footer {
+      width: 160px;
+      filter: invert(1) brightness(2);
+      opacity: 0.7;
+      margin-bottom: 20px;
+    }
+
+    .footer-text {
+      font-size: 12px;
+      font-weight: 300;
+      color: rgba(255,255,255,0.4);
+      line-height: 1.8;
+    }
+
+    .footer-text a {
+      color: rgba(163,191,122,0.8);
+      text-decoration: none;
+    }
+
+    .footer-divider {
+      width: 30px;
+      height: 1px;
+      background: rgba(122,153,86,0.3);
+      margin: 16px auto;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 480px) {
+      .body-content { padding: 32px 28px 0; }
+      .header { padding: 36px 28px 32px; }
+      .hero-band { padding: 28px 28px; }
+      .hero-band h1 { font-size: 30px; }
+      .ticket-header { padding: 22px 24px 16px; }
+      .ticket-details { padding: 20px 24px; display: block; }
+      .detail-col { display: block; width: 100%; padding-right: 0; margin-bottom: 16px; }
+      .ticket-footer { padding: 14px 24px; }
+      .footer { padding: 28px 28px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-wrapper">
+    <div class="email-container">
+
+      <!-- HEADER -->
+      <div class="header">
+        <img class="logo" src="https://i.imgur.com/placeholder.png" alt="Matcha On Ice Social Club"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+        <div style="display:none; font-family:'Cormorant Garamond',Georgia,serif; font-size:28px; color:#fff; font-weight:300; letter-spacing:1px;">
+          <em>Matcha</em> On Ice
+          <div style="font-size:12px; letter-spacing:4px; font-family:'Jost',sans-serif; font-weight:300; margin-top:4px; opacity:0.6;">SOCIAL CLUB</div>
+        </div>
+        <div class="header-divider"></div>
+      </div>
+
+      <!-- HERO BAND -->
+      <div class="hero-band">
+        <div class="confirmed-label">Booking Confirmed</div>
+        <h1>Your ticket is<br><em>confirmed!</em> 🎉</h1>
+        <div class="checkmark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- BODY -->
+      <div class="body-content">
+
+        <div class="greeting">Hello, {{FIRST_NAME}},</div>
+        <div class="event-name-row">{{EVENT_NAME}}</div>
+
+        <!-- TICKET CARD -->
+        <div class="ticket-card">
+          <div class="ticket-header">
+            <div class="event-title-ticket">{{EVENT_NAME}}</div>
+            <div class="ticket-type-badge">{{TICKET_TYPE}}</div>
+          </div>
+
+          <div class="ticket-details">
+            <div class="detail-col">
+              <div class="detail-label">Date</div>
+              <div class="detail-value">{{EVENT_DATE}}</div>
+            </div>
+            <div class="detail-col">
+              <div class="detail-label">Time</div>
+              <div class="detail-value">{{EVENT_TIME}}</div>
+            </div>
+            <div class="detail-col">
+              <div class="detail-label">Location</div>
+              <div class="detail-value">{{EVENT_LOCATION}}</div>
+            </div>
+          </div>
+
+          <div class="ticket-footer">
+            <div class="qr-placeholder">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/>
+                <rect x="18" y="14" width="3" height="3"/><rect x="14" y="18" width="3" height="3"/>
+                <rect x="18" y="18" width="3" height="3"/>
+              </svg>
+            </div>
+            <div class="ticket-footer-text">
+              Your QR code is attached to this email as a PDF ticket.<br>
+              Present it at the entrance for quick check-in.
+            </div>
+          </div>
+        </div>
+
+        <!-- INSTRUCTIONS -->
+        <div class="instructions">
+          <div class="instruction-item">
+            <div class="instruction-num">1</div>
+            <div class="instruction-text">
+              <strong>Save your ticket.</strong> Your ticket PDF is attached to this email. You can also view it online anytime by clicking the button below.
+            </div>
+          </div>
+          <div class="instruction-item">
+            <div class="instruction-num">2</div>
+            <div class="instruction-text">
+              <strong>Show your QR code at the door.</strong> Our team will scan it at the entrance for quick and seamless check-in.
+            </div>
+          </div>
+          <div class="instruction-item">
+            <div class="instruction-num">3</div>
+            <div class="instruction-text">
+              <strong>Questions?</strong> Simply reply to this email and we'll be happy to help.
+            </div>
+          </div>
+        </div>
+
+        <!-- CTA -->
+        <div class="cta-section">
+          <a href="{{TICKET_URL}}" class="cta-button">View My Ticket</a>
+        </div>
+
+      </div><!-- /body-content -->
+
+      <!-- FOOTER -->
+      <div class="footer">
+        <img class="logo-footer" src="https://i.imgur.com/placeholder.png" alt="Matcha On Ice"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+        <div style="display:none; font-family:'Cormorant Garamond',Georgia,serif; font-size:20px; color:rgba(255,255,255,0.6); font-weight:300; margin-bottom:16px;">
+          <em>Matcha</em> On Ice
+        </div>
+        <div class="footer-divider"></div>
+        <div class="footer-text">
+          Matcha On Ice · San Diego, CA<br/>
+          <a href="mailto:hello@matchaonice.com">hello@matchaonice.com</a><br/><br/>
+          You are receiving this because you purchased a ticket for this event.<br/>
+          <a href="{{UNSUBSCRIBE_URL}}">Unsubscribe</a>
+        </div>
+      </div>
+
+    </div><!-- /email-container -->
+  </div><!-- /email-wrapper -->
+</body>
+</html>
