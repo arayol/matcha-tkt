@@ -16,7 +16,7 @@ declare module "http" {
 }
 
 app.post(
-  "/webhook/stripe",
+  "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
   async (req, res) => {
     const signature = req.headers["stripe-signature"];

@@ -10,7 +10,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     });
   });
 
-  app.get("/webhook/stripe", (_req, res) => {
+  app.get("/api/stripe/webhook", (_req, res) => {
     res.json({
       status: "ok",
       message: "Webhook endpoint ativo. Use POST para enviar eventos.",
