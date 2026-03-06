@@ -406,18 +406,24 @@ function buildTicketEmailHtml(params: {
 
     .instruction-item:first-child { border-top: 1px solid #ede8df; }
 
-    .instruction-num {
+    .instruction-num-cell {
       display: table-cell;
+      width: 36px;
+      vertical-align: top;
+      padding-top: 2px;
+    }
+
+    .instruction-num {
+      display: inline-block;
       width: 28px;
       height: 28px;
       border-radius: 50%;
       border: 1px solid #7a9956;
       text-align: center;
-      vertical-align: top;
       font-size: 11px;
       font-weight: 600;
       color: #7a9956;
-      padding-top: 6px;
+      line-height: 28px;
     }
 
     .instruction-text {
@@ -549,19 +555,19 @@ function buildTicketEmailHtml(params: {
         <!-- INSTRUCTIONS -->
         <div class="instructions">
           <div class="instruction-item">
-            <div class="instruction-num">1</div>
+            <div class="instruction-num-cell"><div class="instruction-num">1</div></div>
             <div class="instruction-text">
               <strong>Save your ticket.</strong> Your ticket PDF is attached to this email. You can also view it online anytime by clicking the button below.
             </div>
           </div>
           <div class="instruction-item">
-            <div class="instruction-num">2</div>
+            <div class="instruction-num-cell"><div class="instruction-num">2</div></div>
             <div class="instruction-text">
               <strong>Show your QR code at the door.</strong> Our team will scan it at the entrance for quick and seamless check-in.
             </div>
           </div>
           <div class="instruction-item">
-            <div class="instruction-num">3</div>
+            <div class="instruction-num-cell"><div class="instruction-num">3</div></div>
             <div class="instruction-text">
               <strong>Questions?</strong> Simply reply to this email and we'll be happy to help.
             </div>
