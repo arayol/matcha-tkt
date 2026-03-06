@@ -169,6 +169,41 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  app.get("/api/scanner/stats", async (_req, res) => {
+    try {
+      const ticketList = await storage.listTickets();
+      const totalTickets = ticketList.filter(t => t.status !== "cancelled").length;
+      const checkedIn = ticketList.filter(t => t.status === "used").length;
+      const remaining = ticketList.filter(t => t.status === "valid").length;
+
+      const recentScans = ticketList
+        .filter(t => t.status === "used" && t.usedAt)
+        .sort((a, b) => new Date(b.usedAt!).getTime() - new Date(a.usedAt!).getTime())
+        .slice(0, 20)
+        .map(t => ({
+          id: t.id,
+          purchaserName: t.purchaserName,
+          ticketType: t.ticketType,
+          usedAt: t.usedAt,
+        }));
+
+      const guestList = ticketList
+        .filter(t => t.status !== "cancelled")
+        .map(t => ({
+          id: t.id,
+          purchaserName: t.purchaserName,
+          purchaserEmail: t.purchaserEmail,
+          ticketType: t.ticketType,
+          status: t.status,
+          usedAt: t.usedAt,
+        }));
+
+      res.json({ totalTickets, checkedIn, remaining, recentScans, guestList });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch scanner stats" });
+    }
+  });
+
   app.get("/api/stats", async (_req, res) => {
     try {
       const ticketList = await storage.listTickets();
