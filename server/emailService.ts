@@ -7,11 +7,16 @@ import * as path from "path";
 
 const LOGO_DATA_URI = (() => {
   try {
-    const logoPath = path.join(process.cwd(), "server", "matcha-logo.png");
-    const buf = fs.readFileSync(logoPath);
-    return `data:image/png;base64,${buf.toString("base64")}`;
+    const dataPath = path.join(process.cwd(), "server", "email-logo-data.txt");
+    return fs.readFileSync(dataPath, "utf-8").trim();
   } catch {
-    return "";
+    try {
+      const logoPath = path.join(process.cwd(), "server", "matcha-logo.png");
+      const buf = fs.readFileSync(logoPath);
+      return `data:image/png;base64,${buf.toString("base64")}`;
+    } catch {
+      return "";
+    }
   }
 })();
 
