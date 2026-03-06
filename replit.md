@@ -35,5 +35,11 @@ Exemplo: `Feb 26th, 6 PM - Members Event Ticket`
 Tipos: Members, General, VIP
 
 ## Tema CSS
-- Primary: verde/teal (hsl 152 60% 36%)
+- Paleta: lilás/azul/amarelo suave (estilo dashboard moderno)
+- Primary: roxo (hsl 250 72% 64%)
+- Charts: roxo, azul claro, amarelo, laranja suave, azul escuro
+- Cards: rounded-3xl, shadow-card, border-card-border
+- Sidebar: 88px, ícones centralizados, rounded-[32px]
+- Layout: grid 3 colunas (sidebar + main + painel direito)
+- Fontes: Inter / DM Sans (sans), JetBrains Mono (mono)
 - Tema escuro suportado

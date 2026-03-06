@@ -1,251 +1,248 @@
 import { useState } from "react";
-  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-  import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-  import { Badge } from "@/components/ui/badge";
-  import { Button } from "@/components/ui/button";
-  import { CheckCircle2, Circle, AlertCircle, ExternalLink, Copy, Check, Rocket } from "lucide-react";
+import { CheckCircle2, Circle, ExternalLink, Copy, Check, LayoutDashboard, Ticket, Settings, LogOut, Search } from "lucide-react";
 
-  export default function App() {
-    const [copiedWebhook, setCopiedWebhook] = useState(false);
-    
-    const webhookUrl = `${window.location.origin}/webhook/stripe`;
-    
-    const copyToClipboard = (text: string, setter: (value: boolean) => void) => {
-      navigator.clipboard.writeText(text);
-      setter(true);
-      setTimeout(() => setter(false), 2000);
-    };
+export default function App() {
+  const [copiedWebhook, setCopiedWebhook] = useState(false);
+  const [activeNav, setActiveNav] = useState(0);
 
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-4 md:p-8">
-        <div className="max-w-5xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <h1 className="text-5xl font-bold text-gray-900 mb-3">
-              🍵❄️ Matcha On Ice
-            </h1>
-            <p className="text-2xl text-gray-600 mb-4">
-              Sistema de Gestão de Ingressos para Eventos de Fitness
-            </p>
-            <div className="flex items-center justify-center gap-3">
-              <Badge variant="outline" className="text-lg px-6 py-2 bg-white shadow-sm">
-                Marco T0 - Validação Técnica
-              </Badge>
-              <Badge className="text-lg px-6 py-2 bg-green-600 text-white">
-                <Rocket className="h-4 w-4 mr-2" />
-                PRODUÇÃO
-              </Badge>
+  const webhookUrl = `${window.location.origin}/api/stripe/webhook`;
+
+  const copyToClipboard = (text: string, setter: (value: boolean) => void) => {
+    navigator.clipboard.writeText(text);
+    setter(true);
+    setTimeout(() => setter(false), 2000);
+  };
+
+  const navItems = [
+    { icon: LayoutDashboard, label: "Dashboard" },
+    { icon: Ticket, label: "Ingressos" },
+    { icon: Settings, label: "Config" },
+  ];
+
+  return (
+    <div className="min-h-screen bg-background text-foreground" data-testid="app-root">
+      <div className="mx-auto grid max-w-[1440px] grid-cols-[88px_1fr] gap-6 p-6 lg:grid-cols-[88px_1fr_320px]">
+
+        <aside className="flex min-h-[calc(100vh-48px)] flex-col items-center justify-between rounded-[32px] border border-sidebar-border bg-sidebar px-4 py-6 shadow-card" data-testid="sidebar">
+          <div className="flex flex-col items-center gap-6">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-soft text-xl font-bold" data-testid="logo">
+              M
+            </div>
+
+            <nav className="mt-4 flex flex-col gap-4">
+              {navItems.map((item, index) => (
+                <button
+                  key={item.label}
+                  onClick={() => setActiveNav(index)}
+                  className={`flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${
+                    activeNav === index
+                      ? "bg-sidebar-accent text-primary"
+                      : "text-muted-foreground hover:bg-sidebar-accent"
+                  }`}
+                  data-testid={`nav-${item.label.toLowerCase()}`}
+                >
+                  <item.icon className="h-5 w-5" />
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          <button
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-primary hover:bg-sidebar-accent transition-colors"
+            data-testid="button-logout"
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
+        </aside>
+
+        <main className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight" data-testid="text-title">My Dashboard</h1>
+              <p className="text-sm text-muted-foreground mt-1">Matcha On Ice - Sistema de Ingressos</p>
+            </div>
+
+            <div className="flex h-12 w-[260px] items-center gap-3 rounded-2xl bg-card px-4 shadow-soft border border-card-border">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <input
+                className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                placeholder="Search anything..."
+                data-testid="input-search"
+              />
             </div>
           </div>
 
-          {/* Production Status */}
-          <Alert className="border-green-200 bg-green-50">
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
-            <AlertTitle className="text-green-900">✅ Integração Stripe Configurada!</AlertTitle>
-            <AlertDescription className="text-green-800">
-              A integração oficial do Stripe está ativa via Replit. Suas credenciais estão seguras e gerenciadas automaticamente.
-            </AlertDescription>
-          </Alert>
+          <div className="rounded-3xl border border-card-border bg-card p-6 shadow-card" data-testid="card-status">
+            <div className="mb-6 grid grid-cols-3 gap-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Status do Sistema</p>
+                <p className="mt-2 text-3xl font-semibold">Marco T0</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Integração Stripe</p>
+                <p className="mt-2 text-2xl font-semibold text-primary">Ativa</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium">Webhook</p>
+                <p className="mt-1 text-sm text-muted-foreground">Recebendo eventos com sucesso</p>
+              </div>
+            </div>
+            <div className="h-px bg-border" />
+            <div className="mt-4 flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-status-online" />
+              <span className="text-sm text-muted-foreground">Validação Técnica Completa</span>
+            </div>
+          </div>
 
-          {/* Webhook Configuration */}
-          <Card className="border-2 shadow-lg border-blue-200">
-            <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50">
-              <CardTitle className="text-2xl">🔗 Configurar Webhook do Stripe (PRODUÇÃO)</CardTitle>
-              <CardDescription className="text-base">
-                Configure o webhook para receber notificações de vendas em tempo real
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6 pt-6">
-              {/* Step 1 */}
-              <div className="flex items-start gap-4 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
-                <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
+          <div className="rounded-3xl border border-card-border bg-card p-6 shadow-card" data-testid="card-webhook">
+            <h2 className="text-[28px] font-semibold tracking-tight">Configurar Webhook</h2>
+            <p className="text-sm text-muted-foreground mt-1 mb-6">Configure o endpoint para receber vendas em tempo real</p>
+
+            <div className="space-y-5">
+              <div className="flex items-start gap-4 p-5 rounded-2xl bg-muted/50 border border-muted-border">
+                <div className="flex-shrink-0 w-9 h-9 bg-primary text-primary-foreground rounded-xl flex items-center justify-center font-semibold text-sm">
                   1
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-lg mb-2">Adicionar Webhook Secret</h3>
-                  <p className="text-sm text-gray-600 mb-3">
-                    No painel do Replit, adicione o <strong>STRIPE_WEBHOOK_SECRET</strong>:
-                  </p>
-                  <div className="bg-white p-3 rounded border space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Nome:</span>
-                      <code className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">STRIPE_WEBHOOK_SECRET</code>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Valor:</span>
-                      <code className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">whsec_...</code>
-                    </div>
+                  <h3 className="font-semibold text-base mb-2">Endpoint URL</h3>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={webhookUrl}
+                      readOnly
+                      className="flex-1 px-4 py-2.5 bg-card border border-card-border rounded-xl text-sm font-mono"
+                      data-testid="input-webhook-url"
+                    />
+                    <button
+                      onClick={() => copyToClipboard(webhookUrl, setCopiedWebhook)}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-card-border bg-card hover:bg-sidebar-accent transition-colors"
+                      data-testid="button-copy-webhook"
+                    >
+                      {copiedWebhook ? <Check className="h-4 w-4 text-status-online" /> : <Copy className="h-4 w-4" />}
+                    </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    ⚠️ Você receberá este valor no passo 2 após criar o webhook no Stripe
-                  </p>
                 </div>
               </div>
 
-              {/* Step 2 */}
-              <div className="flex items-start gap-4 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
-                <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
+              <div className="flex items-start gap-4 p-5 rounded-2xl bg-muted/50 border border-muted-border">
+                <div className="flex-shrink-0 w-9 h-9 bg-primary text-primary-foreground rounded-xl flex items-center justify-center font-semibold text-sm">
                   2
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-lg mb-2">Criar Endpoint no Stripe</h3>
-                  <p className="text-sm text-gray-600 mb-3">
-                    No Stripe Dashboard, adicione este endpoint:
-                  </p>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm font-medium mb-2">URL do Endpoint (PRODUÇÃO):</p>
-                      <div className="flex gap-2">
-                        <input 
-                          type="text" 
-                          value={webhookUrl}
-                          readOnly
-                          className="flex-1 px-3 py-2 bg-white border-2 border-blue-300 rounded text-sm font-mono"
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => copyToClipboard(webhookUrl, setCopiedWebhook)}
-                        >
-                          {copiedWebhook ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium mb-1">Evento a selecionar:</p>
-                      <code className="bg-white px-3 py-2 rounded border-2 border-blue-300 text-sm block">
-                        checkout.session.completed
-                      </code>
-                    </div>
-                    <div className="bg-yellow-50 border-2 border-yellow-200 p-3 rounded">
-                      <p className="text-sm font-medium text-yellow-900 mb-1">⚠️ Importante:</p>
-                      <p className="text-xs text-yellow-800">
-                        Após criar o webhook, copie o <strong>Signing secret</strong> (whsec_...) e adicione como STRIPE_WEBHOOK_SECRET nas Secrets do Replit
-                      </p>
-                    </div>
-                    <Button 
-                      className="w-full bg-blue-600 hover:bg-blue-700" 
-                      onClick={() => window.open('https://dashboard.stripe.com/webhooks', '_blank')}
-                    >
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      Abrir Stripe Dashboard (Produção)
-                    </Button>
-                  </div>
+                  <h3 className="font-semibold text-base mb-2">Evento Requerido</h3>
+                  <code className="inline-block bg-card px-4 py-2.5 rounded-xl border border-card-border text-sm font-mono">
+                    checkout.session.completed
+                  </code>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Product Setup */}
-          <Card className="border-2 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50">
-              <CardTitle className="text-2xl">🎫 Configurar Produtos no Stripe</CardTitle>
-              <CardDescription className="text-base">
-                Configure seus produtos de ingresso seguindo o padrão
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-6">
-              <div className="bg-white p-4 rounded border-2 border-green-200">
-                <p className="text-sm font-medium mb-2">📋 Padrão de Nomenclatura:</p>
-                <code className="text-sm font-mono block mb-3 bg-gray-100 p-3 rounded">
-                  [Data], [Hora] - [Tipo] Event Ticket
-                </code>
-                <p className="text-sm font-medium mb-2">✅ Exemplos Corretos:</p>
-                <ul className="space-y-2 text-sm">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                    <code className="text-green-700">Feb 26th, 6 PM - Members Event Ticket</code>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                    <code className="text-green-700">Mar 15th, 7:30 PM - General Event Ticket</code>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                    <code className="text-green-700">Apr 1st, 5 PM - VIP Event Ticket</code>
-                  </li>
-                </ul>
-              </div>
-              <div className="bg-blue-50 p-3 rounded border border-blue-200">
-                <p className="text-sm font-medium text-blue-900 mb-2">🏷️ Tipos de Ingresso Suportados:</p>
-                <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• <strong>Members</strong> - Com aula de fitness incluída</li>
-                  <li>• <strong>General</strong> - Entrada geral sem aula</li>
-                  <li>• <strong>VIP</strong> - Acesso premium com extras</li>
-                </ul>
-              </div>
-              <Button 
-                className="w-full" 
-                variant="outline"
-                onClick={() => window.open('https://dashboard.stripe.com/products', '_blank')}
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Gerenciar Produtos no Stripe
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Success Criteria */}
-          <Card className="border-2 border-green-200 shadow-lg">
-            <CardHeader className="bg-green-50">
-              <CardTitle className="text-xl text-green-900">🎯 Critério de Sucesso - Marco T0</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <Alert className="border-green-200 bg-green-50">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                <AlertTitle className="text-green-900">Validação em Produção:</AlertTitle>
-                <AlertDescription className="mt-3">
-                  <ul className="space-y-2 text-green-800">
-                    <li className="flex items-start gap-2">
-                      <Circle className="h-4 w-4 mt-1 flex-shrink-0" />
-                      <span>Webhook configurado e recebendo eventos do Stripe</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Circle className="h-4 w-4 mt-1 flex-shrink-0" />
-                      <span>Line_items expandidos e dados do produto extraídos</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Circle className="h-4 w-4 mt-1 flex-shrink-0" />
-                      <span>Dados do cliente (nome, email) disponíveis</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Circle className="h-4 w-4 mt-1 flex-shrink-0" />
-                      <span>Padrão de nomenclatura validado (data, hora, tipo)</span>
-                    </li>
-                  </ul>
-                  <p className="mt-4 text-sm font-medium text-green-900">
-                    ✅ Após validar, estaremos prontos para o Marco M1 (Backend Core)!
+              <div className="flex items-start gap-4 p-5 rounded-2xl bg-accent/30 border border-accent-border">
+                <div className="flex-shrink-0 w-9 h-9 bg-chart-3 text-foreground rounded-xl flex items-center justify-center font-semibold text-sm">
+                  !
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-base mb-1">Signing Secret</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Copie o <strong>whsec_...</strong> do Stripe Dashboard e adicione como <code className="bg-card px-1.5 py-0.5 rounded text-xs">STRIPE_WEBHOOK_SECRET</code>
                   </p>
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-
-          {/* Monitoring */}
-          <Card>
-            <CardHeader>
-              <CardTitle>📊 Monitoramento</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-gray-600">
-                Os webhooks são registrados no console do Replit. Verifique os logs para acompanhar:
-              </p>
-              <div className="bg-gray-900 text-green-400 p-4 rounded font-mono text-xs space-y-1">
-                <div>🔔 WEBHOOK DO STRIPE RECEBIDO</div>
-                <div>✅ Assinatura validada</div>
-                <div>💳 COMPRA CONCLUÍDA</div>
-                <div>📧 Cliente: email@exemplo.com</div>
-                <div>🎫 Data: Feb 26th | Hora: 6 PM | Tipo: Members</div>
+                </div>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Footer */}
-          <div className="text-center text-sm text-gray-500 py-6">
-            <p className="mb-2">Matcha On Ice © 2026</p>
-            <p className="text-xs">Sistema em Produção • San Diego, CA</p>
+              <button
+                onClick={() => window.open('https://dashboard.stripe.com/webhooks', '_blank')}
+                className="w-full flex items-center justify-center gap-2 h-12 rounded-2xl bg-primary text-primary-foreground font-medium shadow-soft hover:opacity-90 transition-opacity"
+                data-testid="button-open-stripe"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Abrir Stripe Dashboard
+              </button>
+            </div>
           </div>
-        </div>
+
+          <div className="rounded-3xl border border-card-border bg-card p-6 shadow-card" data-testid="card-products">
+            <h2 className="text-[28px] font-semibold tracking-tight">Produtos & Ingressos</h2>
+            <p className="text-sm text-muted-foreground mt-1 mb-6">Nomenclatura dos produtos no Stripe</p>
+
+            <div className="rounded-2xl bg-muted/50 border border-muted-border p-5 mb-4">
+              <p className="text-sm font-medium mb-3">Formato do Nome:</p>
+              <code className="block bg-card px-4 py-3 rounded-xl border border-card-border text-sm font-mono">
+                [Data], [Hora] - [Tipo] Event Ticket
+              </code>
+            </div>
+
+            <div className="space-y-2.5">
+              {[
+                "Feb 26th, 6 PM - Members Event Ticket",
+                "Mar 15th, 7:30 PM - General Event Ticket",
+                "Apr 1st, 5 PM - VIP Event Ticket",
+              ].map((example, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-muted/30">
+                  <CheckCircle2 className="h-4 w-4 text-status-online flex-shrink-0" />
+                  <code className="text-sm font-mono" data-testid={`text-example-${i}`}>{example}</code>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 rounded-2xl bg-accent/20 border border-accent-border p-4">
+              <p className="text-sm font-medium mb-2">Tipos Suportados:</p>
+              <div className="flex gap-3">
+                {["Members", "General", "VIP"].map((type) => (
+                  <span key={type} className="px-4 py-1.5 rounded-xl bg-card border border-card-border text-sm font-medium" data-testid={`badge-type-${type.toLowerCase()}`}>
+                    {type}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <aside className="hidden lg:block space-y-6">
+          <div className="rounded-3xl border border-card-border bg-card p-6 shadow-card" data-testid="card-validation">
+            <h3 className="text-lg font-semibold tracking-tight mb-4">Marco T0</h3>
+            <div className="space-y-3">
+              {[
+                { done: true, text: "Stripe conectado" },
+                { done: true, text: "Webhook recebendo eventos" },
+                { done: true, text: "Assinatura validada" },
+                { done: false, text: "Line items expandidos" },
+                { done: false, text: "Dados do cliente extraídos" },
+                { done: false, text: "Padrão de nome validado" },
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  {item.done ? (
+                    <CheckCircle2 className="h-4 w-4 text-status-online flex-shrink-0" />
+                  ) : (
+                    <Circle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  )}
+                  <span className={`text-sm ${item.done ? "text-foreground" : "text-muted-foreground"}`} data-testid={`text-checklist-${i}`}>
+                    {item.text}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 h-2 rounded-full bg-muted">
+              <div className="h-2 rounded-full bg-primary" style={{ width: "50%" }} data-testid="progress-bar" />
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">3 de 6 completos</p>
+          </div>
+
+          <div className="rounded-3xl border border-card-border bg-card p-6 shadow-card" data-testid="card-monitor">
+            <h3 className="text-lg font-semibold tracking-tight mb-4">Console</h3>
+            <div className="rounded-2xl bg-foreground p-4 font-mono text-xs space-y-1.5">
+              <div className="text-status-online">Webhook validado</div>
+              <div className="text-chart-2">charge.succeeded</div>
+              <div className="text-chart-2">payment_intent.succeeded</div>
+              <div className="text-chart-2">payment_intent.created</div>
+              <div className="text-chart-2">charge.updated</div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-card-border bg-card p-5 shadow-card text-center" data-testid="card-footer">
+            <p className="text-sm font-medium">Matcha On Ice</p>
+            <p className="text-xs text-muted-foreground mt-1">San Diego, CA</p>
+          </div>
+        </aside>
       </div>
-    );
-  }
+    </div>
+  );
+}
