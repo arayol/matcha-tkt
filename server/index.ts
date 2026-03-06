@@ -98,13 +98,6 @@ app.use((req, res, next) => {
     console.log("🔗 Inicializando StripeSync...");
     const stripeSync = await getStripeSync();
 
-    const webhookBaseUrl = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-    console.log("🔔 Configurando webhook gerenciado:", `${webhookBaseUrl}/api/stripe/webhook`);
-    await stripeSync.findOrCreateManagedWebhook(
-      `${webhookBaseUrl}/api/stripe/webhook`,
-    );
-    console.log("✅ Webhook gerenciado configurado");
-
     console.log("🔄 Sincronizando dados do Stripe...");
     await stripeSync.syncBackfill();
     console.log("✅ Dados sincronizados");
