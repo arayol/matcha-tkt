@@ -3,6 +3,13 @@
 ## About
 Ticket management system for fitness events in San Diego, CA. Includes Stripe integration for automated sales, QR codes, unique ticket URLs, admin dashboard, and courtesy ticket generation.
 
+## Status: Marco M5 - Email Delivery ✅
+- **M5 complete:** Gmail OAuth email integration via Replit connector
+  - `server/emailService.ts` — sends HTML email with PDF ticket attached
+  - Uses `gmail.send` scope only (no getProfile — sender resolved from OAuth settings)
+  - Fires automatically on: Stripe webhook ticket creation + courtesy ticket creation
+  - Email: purple branded HTML, event details, "View My Ticket" button, PDF attachment
+
 ## Status: Marco M4 - Dashboard Admin ✅
 - **M1 complete:** DB schema, QR codes, webhooks, API routes, ticket page, dashboard
 - **M2 complete:** PWA scanner at `/scan`, camera QR validation, haptic feedback

@@ -44,7 +44,17 @@ async function getAccessToken() {
   if (!connectionSettings || !accessToken) {
     throw new Error("Gmail not connected");
   }
+
   return accessToken;
+}
+
+function getSenderEmail(): string {
+  return (
+    connectionSettings?.settings?.email ||
+    connectionSettings?.settings?.oauth?.credentials?.email ||
+    connectionSettings?.settings?.user_email ||
+    "noreply@matchaonice.com"
+  );
 }
 
 async function getUncachableGmailClient() {
@@ -192,8 +202,7 @@ export async function sendTicketEmail(params: {
   try {
     const gmail = await getUncachableGmailClient();
 
-    const me = await gmail.users.getProfile({ userId: "me" });
-    const senderEmail = me.data.emailAddress || "noreply@matchaonice.com";
+    const senderEmail = getSenderEmail();
     const fromHeader = `Matcha On Ice <${senderEmail}>`;
 
     const pdfBuffer = await generateTicketPDF(ticket, event);
