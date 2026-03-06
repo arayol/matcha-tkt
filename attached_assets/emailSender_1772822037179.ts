@@ -93,8 +93,10 @@ function makeRfc2822(params: {
 }) {
   const boundary = `MOI_${Date.now()}`;
 
+  // Encode HTML as base64 — most reliable encoding across all email clients
   const htmlBase64 = Buffer.from(params.htmlBody, "utf-8").toString("base64");
 
+  // Encode subject for UTF-8 support
   const encodedSubject = `=?UTF-8?B?${Buffer.from(params.subject, "utf-8").toString("base64")}?=`;
 
   const lines: string[] = [
@@ -104,12 +106,15 @@ function makeRfc2822(params: {
     `MIME-Version: 1.0`,
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
     ``,
+    // ── HTML part ──────────────────────────────────────────
     `--${boundary}`,
     `Content-Type: text/html; charset="UTF-8"`,
-    `Content-Transfer-Encoding: base64`,
+    `Content-Transfer-Encoding: base64`,          // ← changed from quoted-printable
     ``,
+    // Split base64 into 76-char lines (RFC 2045 requirement)
     htmlBase64.match(/.{1,76}/g)!.join("\r\n"),
     ``,
+    // ── PDF attachment ─────────────────────────────────────
     `--${boundary}`,
     `Content-Type: application/pdf; name="${params.pdfFilename}"`,
     `Content-Disposition: attachment; filename="${params.pdfFilename}"`,
