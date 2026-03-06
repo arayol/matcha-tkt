@@ -9,4 +9,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       phase: "Marco T0 - Validação Técnica",
     });
   });
+
+  app.get("/webhook/stripe", (_req, res) => {
+    res.json({
+      status: "ok",
+      message: "Webhook endpoint ativo. Use POST para enviar eventos.",
+    });
+  });
 }
