@@ -3,14 +3,18 @@
 ## About
 Ticket management system for fitness events in San Diego, CA. Includes Stripe integration for automated sales, QR codes, unique ticket URLs, admin dashboard, and courtesy ticket generation.
 
-## Status: Marco M3 - Sistema de Ingressos ✅
+## Status: Marco M4 - Dashboard Admin ✅
 - **M1 complete:** DB schema, QR codes, webhooks, API routes, ticket page, dashboard
 - **M2 complete:** PWA scanner at `/scan`, camera QR validation, haptic feedback
 - **M3 complete:** PDF ticket download, Share button (Web Share API + clipboard fallback)
-  - Server-side PDF via pdfkit with QR code embedded, event info, branding
-  - Download PDF button (valid tickets only) → GET /api/ticket/:slug/pdf
-  - Share button: native share sheet on mobile, clipboard copy on desktop
-  - Dashed divider styling on ticket page, larger QR code (288px)
+- **M4 complete:** Admin dashboard with management UI, courtesy form, sales report
+  - Removed M1 dev cards (Marco M1 Status, Quick Actions, footer branding)
+  - Right panel: Courtesy Ticket form (event/name/email/type) + Sales Report card
+  - Revenue stat card in the header (5th stat, calculates from Stripe tickets)
+  - Ticket filter tabs: All / Valid / Used / Courtesy / Cancelled with counts
+  - "Courtesy" badge on tickets without stripeSessionId
+  - Events card shows per-event valid+used ticket breakdown
+  - Stats API extended: totalRevenueCents, courtesyTickets, cancelledTickets, byType
 
 ## Architecture
 - **Frontend:** React + TypeScript + Vite + Tailwind CSS + shadcn/ui + wouter (routing) + TanStack Query

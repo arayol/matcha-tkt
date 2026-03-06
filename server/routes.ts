@@ -169,12 +169,38 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const ticketList = await storage.listTickets();
       const eventList = await storage.listEvents();
 
+      const eventMap = new Map(eventList.map(e => [e.id, e]));
+
       const totalTickets = ticketList.length;
       const validTickets = ticketList.filter(t => t.status === "valid").length;
       const usedTickets = ticketList.filter(t => t.status === "used").length;
+      const cancelledTickets = ticketList.filter(t => t.status === "cancelled").length;
+      const courtesyTickets = ticketList.filter(t => !t.stripeSessionId).length;
       const totalEvents = eventList.length;
 
-      res.json({ totalTickets, validTickets, usedTickets, totalEvents });
+      const totalRevenueCents = ticketList
+        .filter(t => t.stripeSessionId && (t.status === "valid" || t.status === "used"))
+        .reduce((sum, t) => {
+          const event = eventMap.get(t.eventId);
+          return sum + (event?.priceInCents || 0);
+        }, 0);
+
+      const byType = ticketList.reduce((acc: Record<string, number>, t) => {
+        const type = t.ticketType || "General";
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+      }, {});
+
+      res.json({
+        totalTickets,
+        validTickets,
+        usedTickets,
+        cancelledTickets,
+        courtesyTickets,
+        totalEvents,
+        totalRevenueCents,
+        byType,
+      });
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch stats" });
     }
