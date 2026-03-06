@@ -34,6 +34,9 @@ Formato do nome: `[Data], [Hora] - [Tipo] Event Ticket`
 Exemplo: `Feb 26th, 6 PM - Members Event Ticket`
 Tipos: Members, General, VIP
 
+## User Preferences
+- All app UI text, labels, and content must be in **English (US)**.
+
 ## Tema CSS
 - Paleta: lilás/azul/amarelo suave (estilo dashboard moderno)
 - Primary: roxo (hsl 250 72% 64%)
