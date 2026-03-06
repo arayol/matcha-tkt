@@ -1,48 +1,69 @@
-# Matcha On Ice - Sistema de Gestão de Ingressos
+# Matcha On Ice - Ticket Management System
 
-## Sobre
-Sistema de gestão de ingressos para eventos fitness em San Diego, CA. Inclui integração com Stripe para vendas automatizadas, QR codes, URLs únicas de ingressos, dashboard admin e PWA mobile para validação.
+## About
+Ticket management system for fitness events in San Diego, CA. Includes Stripe integration for automated sales, QR codes, unique ticket URLs, admin dashboard, and courtesy ticket generation.
 
-## Status: Marco T0 - Validação Técnica ✅
-- Webhook Stripe recebendo e validando eventos com sucesso
-- Assinatura de webhook verificada (constructEvent)
-- Pipeline: Stripe → Webhook → Express → Handler funcionando
+## Status: Marco M1 - Backend Core ✅
+- Database schema: events + tickets tables in PostgreSQL
+- QR code generation (server-side via `qrcode` package)
+- Webhook handler creates tickets from `checkout.session.completed`
+- API routes for tickets, events, validation, courtesy tickets
+- Public ticket page with QR code display
+- Dashboard with live data from API
 
-## Arquitetura
-- **Frontend:** React + TypeScript + Vite + Tailwind CSS + shadcn/ui
+## Architecture
+- **Frontend:** React + TypeScript + Vite + Tailwind CSS + shadcn/ui + wouter (routing) + TanStack Query
 - **Backend:** Express.js + TypeScript
-- **Banco:** PostgreSQL (Replit) + Drizzle ORM
-- **Stripe:** stripe-replit-sync para migrações/sync + verificação direta de assinatura para webhooks
+- **Database:** PostgreSQL (Replit) + Drizzle ORM
+- **Stripe:** stripe-replit-sync for migrations/sync + direct signature verification for webhooks
+- **QR Codes:** `qrcode` package (server-side PNG generation as base64)
 
-## Arquivos Importantes
-- `server/index.ts` — Servidor principal, rota webhook POST `/api/stripe/webhook` (registrada ANTES de express.json())
-- `server/stripeClient.ts` — Cliente Stripe usando `STRIPE_SECRET_KEY` env var
-- `server/webhookHandlers.ts` — Processamento de webhooks, handler para checkout.session.completed
-- `server/routes.ts` — API routes (health check, webhook GET test)
-- `shared/schema.ts` — Schema do banco (a expandir no Marco M1)
-- `client/src/App.tsx` — Frontend (página de instruções T0)
-- `client/src/index.css` — Tema verde/teal
+## Important Files
+- `server/index.ts` — Main server, webhook POST `/api/stripe/webhook` (before express.json())
+- `server/stripeClient.ts` — Stripe client using `STRIPE_SECRET_KEY` env var
+- `server/webhookHandlers.ts` — Webhook processing, creates tickets on checkout.session.completed
+- `server/routes.ts` — API routes (events, tickets, validation, courtesy, stats)
+- `server/qrcode.ts` — QR code generation utility
+- `server/storage.ts` — DatabaseStorage with full CRUD for events/tickets
+- `server/db.ts` — PostgreSQL connection via drizzle-orm
+- `shared/schema.ts` — Database schema (users, events, tickets)
+- `client/src/App.tsx` — Router (Dashboard + TicketPage)
+- `client/src/pages/Dashboard.tsx` — Admin dashboard with live data
+- `client/src/pages/TicketPage.tsx` — Public ticket display with QR code
+- `client/src/index.css` — CSS variables (lilac/blue/yellow palette)
+- `tailwind.config.ts` — Extended with shadow-card, shadow-soft, rounded-3xl
 
-## Secrets Necessárias
-- `STRIPE_SECRET_KEY` — Chave secreta do Stripe (sk_test_... ou sk_live_...)
-- `STRIPE_WEBHOOK_SECRET` — Signing secret do webhook (whsec_...)
-- `DATABASE_URL` — Conexão PostgreSQL (automática Replit)
-- `SESSION_SECRET` — Secret para sessões
+## API Endpoints
+- `GET /api/health` — System status
+- `GET /api/stats` — Dashboard stats (total/valid/used tickets, total events)
+- `GET /api/events` — List all events
+- `GET /api/tickets` — List all tickets (admin)
+- `GET /api/tickets/:id` — Get ticket by ID
+- `GET /api/ticket/:urlSlug` — Get ticket by URL slug (public)
+- `POST /api/tickets/:id/validate` — Mark ticket as used
+- `POST /api/tickets/validate-qr` — Validate by QR data
+- `POST /api/tickets/courtesy` — Create courtesy ticket
 
-## Convenção de Produtos Stripe
-Formato do nome: `[Data], [Hora] - [Tipo] Event Ticket`
-Exemplo: `Feb 26th, 6 PM - Members Event Ticket`
-Tipos: Members, General, VIP
+## Secrets Required
+- `STRIPE_SECRET_KEY` — Stripe secret key (sk_test_... or sk_live_...)
+- `STRIPE_WEBHOOK_SECRET` — Webhook signing secret (whsec_...)
+- `DATABASE_URL` — PostgreSQL connection (auto-managed by Replit)
+- `SESSION_SECRET` — Session secret
+
+## Stripe Product Naming Convention
+Format: `[Date], [Time] - [Type] Event Ticket`
+Example: `Feb 26th, 6 PM - Members Event Ticket`
+Types: Members, General, VIP
 
 ## User Preferences
 - All app UI text, labels, and content must be in **English (US)**.
 
-## Tema CSS
-- Paleta: lilás/azul/amarelo suave (estilo dashboard moderno)
-- Primary: roxo (hsl 250 72% 64%)
-- Charts: roxo, azul claro, amarelo, laranja suave, azul escuro
+## CSS Theme
+- Palette: lilac/blue/yellow soft (modern dashboard style)
+- Primary: purple (hsl 250 72% 64%)
+- Charts: purple, light blue, yellow, soft orange, dark blue
 - Cards: rounded-3xl, shadow-card, border-card-border
-- Sidebar: 88px, ícones centralizados, rounded-[32px]
-- Layout: grid 3 colunas (sidebar + main + painel direito)
-- Fontes: Inter / DM Sans (sans), JetBrains Mono (mono)
-- Tema escuro suportado
+- Sidebar: 88px, centered icons, rounded-[32px]
+- Layout: 3-column grid (sidebar + main + right panel)
+- Fonts: Inter / DM Sans (sans), JetBrains Mono (mono)
+- Dark mode supported
