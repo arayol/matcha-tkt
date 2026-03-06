@@ -3,6 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { generateTicketQR } from "./qrcode";
 import { generateTicketPDF } from "./pdfGenerator";
+import { sendTicketEmail } from "./emailService";
 import { insertTicketSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -138,6 +139,10 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         ticketUrl,
         status: "valid",
       });
+
+      sendTicketEmail({ ticket, event, isCourtesy: true }).catch(err =>
+        console.error("⚠️ Courtesy email send failed (non-blocking):", err)
+      );
 
       res.json({ message: "Courtesy ticket created", ticket });
     } catch (err) {

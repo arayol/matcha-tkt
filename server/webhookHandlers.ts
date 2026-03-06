@@ -2,6 +2,7 @@ import Stripe from "stripe";
 import { getUncachableStripeClient } from "./stripeClient";
 import { storage } from "./storage";
 import { generateTicketQR } from "./qrcode";
+import { sendTicketEmail } from "./emailService";
 
 export class WebhookHandlers {
   static async processWebhook(payload: Buffer, signature: string) {
@@ -114,6 +115,10 @@ export class WebhookHandlers {
           console.log(`  🎟️ Ticket ${i + 1}/${quantity} created: ${ticket.id}`);
           console.log(`     URL: /ticket/${ticketUrl}`);
           console.log(`     QR Data: ${qrData}`);
+
+          sendTicketEmail({ ticket, event: dbEvent }).catch(err =>
+            console.error("  ⚠️ Email send failed (non-blocking):", err)
+          );
         }
       }
 
