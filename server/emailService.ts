@@ -5,18 +5,12 @@ import { generateTicketPDF } from "./pdfGenerator";
 import * as fs from "fs";
 import * as path from "path";
 
-const LOGO_DATA_URI = (() => {
+const LOGO_BUFFER: Buffer = (() => {
   try {
-    const dataPath = path.join(process.cwd(), "server", "email-logo-data.txt");
-    return fs.readFileSync(dataPath, "utf-8").trim();
+    const logoPath = path.join(process.cwd(), "server", "matcha-logo.png");
+    return fs.readFileSync(logoPath);
   } catch {
-    try {
-      const logoPath = path.join(process.cwd(), "server", "matcha-logo.png");
-      const buf = fs.readFileSync(logoPath);
-      return `data:image/png;base64,${buf.toString("base64")}`;
-    } catch {
-      return "";
-    }
+    return Buffer.alloc(0);
   }
 })();
 
@@ -90,11 +84,12 @@ function makeRfc2822(params: {
   htmlBody: string;
   pdfBuffer: Buffer;
   pdfFilename: string;
+  logoBuffer: Buffer;
 }) {
-  const boundary = `MOI_${Date.now()}`;
+  const mixedBoundary = `MOI_mixed_${Date.now()}`;
+  const relatedBoundary = `MOI_related_${Date.now()}`;
 
   const htmlBase64 = Buffer.from(params.htmlBody, "utf-8").toString("base64");
-
   const encodedSubject = `=?UTF-8?B?${Buffer.from(params.subject, "utf-8").toString("base64")}?=`;
 
   const lines: string[] = [
@@ -102,22 +97,35 @@ function makeRfc2822(params: {
     `To: ${params.to}`,
     `Subject: ${encodedSubject}`,
     `MIME-Version: 1.0`,
-    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
     ``,
-    `--${boundary}`,
+    `--${mixedBoundary}`,
+    `Content-Type: multipart/related; boundary="${relatedBoundary}"`,
+    ``,
+    `--${relatedBoundary}`,
     `Content-Type: text/html; charset="UTF-8"`,
     `Content-Transfer-Encoding: base64`,
     ``,
     htmlBase64.match(/.{1,76}/g)!.join("\r\n"),
     ``,
-    `--${boundary}`,
+    `--${relatedBoundary}`,
+    `Content-Type: image/png; name="matcha-logo.png"`,
+    `Content-ID: <matcha-logo>`,
+    `Content-Disposition: inline; filename="matcha-logo.png"`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    params.logoBuffer.toString("base64").match(/.{1,76}/g)!.join("\r\n"),
+    ``,
+    `--${relatedBoundary}--`,
+    ``,
+    `--${mixedBoundary}`,
     `Content-Type: application/pdf; name="${params.pdfFilename}"`,
     `Content-Disposition: attachment; filename="${params.pdfFilename}"`,
     `Content-Transfer-Encoding: base64`,
     ``,
     params.pdfBuffer.toString("base64").match(/.{1,76}/g)!.join("\r\n"),
     ``,
-    `--${boundary}--`,
+    `--${mixedBoundary}--`,
   ];
 
   const raw = lines.join("\r\n");
@@ -185,7 +193,7 @@ function buildTicketEmailHtml(params: {
     }
 
     .header {
-      background-color: #2a2520;
+      background-color: #000000;
       padding: 48px 48px 40px;
       text-align: center;
       position: relative;
@@ -213,7 +221,6 @@ function buildTicketEmailHtml(params: {
     .header img.logo {
       width: 440px;
       max-width: 200%;
-      filter: invert(1) brightness(2);
       position: relative;
       z-index: 1;
     }
@@ -255,18 +262,6 @@ function buildTicketEmailHtml(params: {
       font-weight: 400;
     }
 
-    .checkmark {
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      border: 1.5px solid rgba(255,255,255,0.5);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      margin: 16px auto 0;
-    }
-
-    .checkmark svg { width: 20px; height: 20px; }
 
     .body-content {
       padding: 48px 48px 0;
@@ -461,14 +456,13 @@ function buildTicketEmailHtml(params: {
     }
 
     .footer {
-      background: #2a2520;
+      background: #000000;
       padding: 36px 48px;
       text-align: center;
     }
 
     .footer img.logo-footer {
       width: 160px;
-      filter: invert(1) brightness(2);
       opacity: 0.7;
       margin-bottom: 20px;
     }
@@ -498,9 +492,9 @@ function buildTicketEmailHtml(params: {
     <div class="email-container">
 
       <!-- HEADER -->
-      <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#2a2520" style="background-color:#2a2520;">
-        <tr><td class="header" style="background-color:#2a2520;">
-          <img class="logo" src="${LOGO_DATA_URI}" alt="Matcha On Ice Social Club" />
+      <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#000000" style="background-color:#000000;">
+        <tr><td class="header" style="background-color:#000000;">
+          <img class="logo" src="cid:matcha-logo" alt="Matcha On Ice Social Club" />
           <div class="header-divider"></div>
         </td></tr>
       </table>
@@ -509,11 +503,6 @@ function buildTicketEmailHtml(params: {
       <div class="hero-band">
         <div class="confirmed-label">Booking Confirmed</div>
         <h1>Your ticket is<br><em>confirmed.</em></h1>
-        <div class="checkmark">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        </div>
       </div>
 
       <!-- BODY -->
@@ -584,9 +573,9 @@ function buildTicketEmailHtml(params: {
       </div><!-- /body-content -->
 
       <!-- FOOTER -->
-      <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#2a2520" style="background-color:#2a2520;">
-        <tr><td class="footer" style="background-color:#2a2520;">
-          <img class="logo-footer" src="${LOGO_DATA_URI}" alt="Matcha On Ice" />
+      <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#000000" style="background-color:#000000;">
+        <tr><td class="footer" style="background-color:#000000;">
+          <img class="logo-footer" src="cid:matcha-logo" alt="Matcha On Ice" />
           <div class="footer-divider"></div>
           <div class="footer-text">
             Matcha On Ice &middot; San Diego, CA<br/>
@@ -635,6 +624,7 @@ export async function sendTicketEmail(params: {
       htmlBody,
       pdfBuffer,
       pdfFilename,
+      logoBuffer: LOGO_BUFFER,
     });
 
     await gmail.users.messages.send({
