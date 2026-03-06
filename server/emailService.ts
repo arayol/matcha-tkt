@@ -498,10 +498,12 @@ function buildTicketEmailHtml(params: {
     <div class="email-container">
 
       <!-- HEADER -->
-      <div class="header">
-        <img class="logo" src="${LOGO_DATA_URI}" alt="Matcha On Ice Social Club" />
-        <div class="header-divider"></div>
-      </div>
+      <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#2a2520" style="background-color:#2a2520;">
+        <tr><td class="header" style="background-color:#2a2520;">
+          <img class="logo" src="${LOGO_DATA_URI}" alt="Matcha On Ice Social Club" />
+          <div class="header-divider"></div>
+        </td></tr>
+      </table>
 
       <!-- HERO BAND -->
       <div class="hero-band">
@@ -582,14 +584,16 @@ function buildTicketEmailHtml(params: {
       </div><!-- /body-content -->
 
       <!-- FOOTER -->
-      <div class="footer">
-        <img class="logo-footer" src="${LOGO_DATA_URI}" alt="Matcha On Ice" />
-        <div class="footer-divider"></div>
-        <div class="footer-text">
-          Matcha On Ice &middot; San Diego, CA<br/>
-          <a href="mailto:contact@matchaonice.com">contact@matchaonice.com</a>
-        </div>
-      </div>
+      <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#2a2520" style="background-color:#2a2520;">
+        <tr><td class="footer" style="background-color:#2a2520;">
+          <img class="logo-footer" src="${LOGO_DATA_URI}" alt="Matcha On Ice" />
+          <div class="footer-divider"></div>
+          <div class="footer-text">
+            Matcha On Ice &middot; San Diego, CA<br/>
+            <a href="mailto:contact@matchaonice.com">contact@matchaonice.com</a>
+          </div>
+        </td></tr>
+      </table>
 
     </div><!-- /email-container -->
   </div><!-- /email-wrapper -->
