@@ -8,6 +8,9 @@ export class WebhookHandlers {
       throw new Error("STRIPE_WEBHOOK_SECRET not configured");
     }
 
+    console.log("🔑 Webhook secret em uso (primeiros 12 chars):", webhookSecret.substring(0, 12) + "...");
+    console.log("📩 Stripe-Signature header:", signature.substring(0, 50) + "...");
+
     const stripe = await getUncachableStripeClient();
     const event = stripe.webhooks.constructEvent(payload, signature, webhookSecret);
 
