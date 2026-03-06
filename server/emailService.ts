@@ -35,21 +35,23 @@ async function getAccessToken() {
   const xReplitToken = process.env.REPL_IDENTITY
     ? "repl " + process.env.REPL_IDENTITY
     : process.env.WEB_REPL_RENEWAL
-    ? "depl " + process.env.WEB_REPL_RENEWAL
-    : null;
+      ? "depl " + process.env.WEB_REPL_RENEWAL
+      : null;
 
   if (!xReplitToken) {
     throw new Error("X-Replit-Token not found for repl/depl");
   }
 
   connectionSettings = await fetch(
-    "https://" + hostname + "/api/v2/connection?include_secrets=true&connector_names=google-mail",
+    "https://" +
+      hostname +
+      "/api/v2/connection?include_secrets=true&connector_names=google-mail",
     {
       headers: {
         Accept: "application/json",
         "X-Replit-Token": xReplitToken,
       },
-    }
+    },
   )
     .then((res) => res.json())
     .then((data) => data.items?.[0]);
@@ -131,8 +133,8 @@ function buildTicketEmailHtml(params: {
   const baseUrl = process.env.REPLIT_DEV_DOMAIN
     ? `https://${process.env.REPLIT_DEV_DOMAIN}`
     : process.env.REPL_SLUG
-    ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-    : "http://localhost:5000";
+      ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+      : "http://localhost:5000";
 
   const fullTicketUrl = `${baseUrl}/ticket/${params.ticketUrl}`;
   const firstName = params.name.split(" ")[0];
@@ -659,7 +661,9 @@ export async function sendTicketEmail(params: {
       requestBody: { raw: rawMessage },
     });
 
-    console.log(`📧 Ticket email sent to ${ticket.purchaserEmail} for ticket ${ticket.id}`);
+    console.log(
+      `📧 Ticket email sent to ${ticket.purchaserEmail} for ticket ${ticket.id}`,
+    );
     return true;
   } catch (err) {
     console.error("❌ Failed to send ticket email:", err);
