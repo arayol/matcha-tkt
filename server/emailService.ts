@@ -211,8 +211,8 @@ function buildTicketEmailHtml(params: {
     }
 
     .header img.logo {
-      width: 220px;
-      max-width: 100%;
+      width: 440px;
+      max-width: 200%;
       filter: invert(1) brightness(2);
       position: relative;
       z-index: 1;
