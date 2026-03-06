@@ -1,6 +1,6 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { LayoutDashboard, Ticket, Settings, LogOut, Search, CheckCircle2, Circle, ExternalLink, Users, Calendar, TrendingUp } from "lucide-react";
+import { useLocation } from "wouter";
+import { LayoutDashboard, Ticket, Settings, LogOut, Search, CheckCircle2, Circle, ExternalLink, Calendar, TrendingUp, ScanLine } from "lucide-react";
 
 interface Stats {
   totalTickets: number;
@@ -30,16 +30,17 @@ interface EventData {
 }
 
 export default function Dashboard() {
-  const [activeNav, setActiveNav] = useState(0);
+  const [, navigate] = useLocation();
 
   const { data: stats } = useQuery<Stats>({ queryKey: ["/api/stats"] });
   const { data: ticketList } = useQuery<TicketData[]>({ queryKey: ["/api/tickets"] });
   const { data: eventList } = useQuery<EventData[]>({ queryKey: ["/api/events"] });
 
   const navItems = [
-    { icon: LayoutDashboard, label: "Dashboard" },
-    { icon: Ticket, label: "Tickets" },
-    { icon: Settings, label: "Settings" },
+    { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+    { icon: ScanLine, label: "Scanner", href: "/scan" },
+    { icon: Ticket, label: "Tickets", href: "/" },
+    { icon: Settings, label: "Settings", href: "/" },
   ];
 
   return (
@@ -52,13 +53,14 @@ export default function Dashboard() {
               M
             </div>
             <nav className="mt-4 flex flex-col gap-4">
-              {navItems.map((item, index) => (
+              {navItems.map((item) => (
                 <button
                   key={item.label}
-                  onClick={() => setActiveNav(index)}
+                  onClick={() => navigate(item.href)}
+                  title={item.label}
                   className={`flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${
-                    activeNav === index
-                      ? "bg-sidebar-accent text-primary"
+                    item.label === "Scanner"
+                      ? "text-muted-foreground hover:bg-sidebar-accent hover:text-primary"
                       : "text-muted-foreground hover:bg-sidebar-accent"
                   }`}
                   data-testid={`nav-${item.label.toLowerCase()}`}

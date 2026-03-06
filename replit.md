@@ -3,13 +3,13 @@
 ## About
 Ticket management system for fitness events in San Diego, CA. Includes Stripe integration for automated sales, QR codes, unique ticket URLs, admin dashboard, and courtesy ticket generation.
 
-## Status: Marco M1 - Backend Core ✅
-- Database schema: events + tickets tables in PostgreSQL
-- QR code generation (server-side via `qrcode` package)
-- Webhook handler creates tickets from `checkout.session.completed`
-- API routes for tickets, events, validation, courtesy tickets
-- Public ticket page with QR code display
-- Dashboard with live data from API
+## Status: Marco M2 - PWA Scanner ✅
+- **M1 complete:** DB schema, QR codes, webhooks, API routes, ticket page, dashboard
+- **M2 complete:** PWA manifest, scanner page at `/scan`, validate-qr API integration
+  - Mobile-first design (400px), all scan states (idle/scanning/loading/success/error)
+  - Haptic feedback via navigator.vibrate()
+  - Atomic ticket validation (race-condition safe)
+  - "Add to Home Screen" ready (manifest.json, apple-mobile-web-app-capable)
 
 ## Architecture
 - **Frontend:** React + TypeScript + Vite + Tailwind CSS + shadcn/ui + wouter (routing) + TanStack Query
@@ -27,9 +27,12 @@ Ticket management system for fitness events in San Diego, CA. Includes Stripe in
 - `server/storage.ts` — DatabaseStorage with full CRUD for events/tickets
 - `server/db.ts` — PostgreSQL connection via drizzle-orm
 - `shared/schema.ts` — Database schema (users, events, tickets)
-- `client/src/App.tsx` — Router (Dashboard + TicketPage)
-- `client/src/pages/Dashboard.tsx` — Admin dashboard with live data
+- `client/src/App.tsx` — Router (Dashboard + TicketPage + ScannerPage)
+- `client/src/pages/Dashboard.tsx` — Admin dashboard with live data + Scanner nav link
 - `client/src/pages/TicketPage.tsx` — Public ticket display with QR code
+- `client/src/pages/ScannerPage.tsx` — PWA mobile QR scanner (7 states)
+- `client/public/manifest.json` — PWA manifest (start_url: /scan, standalone)
+- `client/index.html` — PWA meta tags (apple-mobile-web-app-capable, theme-color)
 - `client/src/index.css` — CSS variables (lilac/blue/yellow palette)
 - `tailwind.config.ts` — Extended with shadow-card, shadow-soft, rounded-3xl
 
