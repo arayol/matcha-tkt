@@ -575,7 +575,6 @@ function buildTicketEmailHtml(params: {
       <!-- FOOTER -->
       <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#352d17" style="background-color:#352d17;">
         <tr><td class="footer" style="background-color:#352d17;">
-          <img class="logo-footer" src="cid:matcha-logo" alt="Matcha On Ice" />
           <div class="footer-divider"></div>
           <div class="footer-text">
             Matcha On Ice &middot; San Diego, CA<br/>
