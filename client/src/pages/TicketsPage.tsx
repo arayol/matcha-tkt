@@ -16,6 +16,7 @@ interface TicketData {
   status: string;
   purchasedAt: string;
   stripeSessionId: string | null;
+  issuedBy: string | null;
 }
 
 interface Stats {
@@ -138,6 +139,9 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                         <p className="text-sm font-medium truncate">{ticket.purchaserName}</p>
                         {!ticket.stripeSessionId && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-primary/10 text-primary">Courtesy</span>
+                        )}
+                        {!ticket.stripeSessionId && ticket.issuedBy && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-muted text-muted-foreground" data-testid={`badge-issuer-${ticket.id}`}>by {ticket.issuedBy}</span>
                         )}
                       </div>
                       <p className="text-xs truncate text-muted-foreground">{ticket.purchaserEmail}</p>

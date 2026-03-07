@@ -177,6 +177,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const ticketId = crypto.randomUUID();
       const { qrData, qrCode, ticketUrl } = await generateTicketQR(ticketId);
 
+      const issuer = req.user as any;
       const ticket = await storage.createTicket({
         eventId,
         purchaserName,
@@ -188,6 +189,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         qrData,
         ticketUrl,
         status: "valid",
+        issuedBy: issuer?.username || null,
       });
 
       sendTicketEmail({ ticket, event, isCourtesy: true }).catch(err =>

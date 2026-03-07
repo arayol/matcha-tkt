@@ -118,9 +118,6 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
           <div className={`absolute left-0 top-0 bottom-0 w-72 p-5 flex flex-col shadow-2xl transition-transform ${dark ? "bg-[#111]" : "bg-card"}`}>
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-lg font-bold">
-                  M
-                </div>
                 <div>
                   <p className="font-semibold text-sm">Matcha On Ice</p>
                   <p className={`text-xs ${dark ? "text-gray-500" : "text-muted-foreground"}`}>Ticket Management</p>
@@ -178,12 +175,7 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
         >
           <Menu className="h-5 w-5" />
         </button>
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">
-            M
-          </div>
-          <span className="font-semibold text-sm">Matcha On Ice</span>
-        </div>
+        <span className="font-semibold text-sm">Matcha On Ice</span>
         <button onClick={toggleTheme} className={`p-2 rounded-xl ${dark ? "text-gray-400 hover:text-white" : "text-muted-foreground hover:text-foreground"}`} data-testid="button-theme-mobile">
           {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
@@ -193,10 +185,7 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
 
         <aside className="hidden md:flex min-h-[calc(100vh-48px)] flex-col items-center justify-between rounded-[32px] border border-sidebar-border bg-sidebar px-4 py-6 shadow-card" data-testid="sidebar">
           <div className="flex flex-col items-center gap-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-soft text-xl font-bold" data-testid="logo">
-              M
-            </div>
-            <nav className="mt-4 flex flex-col gap-4">
+            <nav className="flex flex-col gap-4">
               {sidebarNav.map((item) => (
                 <button
                   key={item.label}

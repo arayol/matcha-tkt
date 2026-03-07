@@ -3,18 +3,14 @@
 ## About
 Ticket management system for fitness events in San Diego, CA. Includes Stripe integration for automated sales, QR codes, unique ticket URLs, admin dashboard, courtesy ticket generation, and Gmail OAuth email delivery.
 
-## Status: Marco M8 - Unified Navigation + Scanner Styling
+## Status: M8+ — Scanner Purple Buttons + Issuer Badge
+- **Scanner color migration:** All scanner buttons, accents, tab highlights, icons, badges changed from matcha green (#7a9956) to `bg-primary` (purple). Only the progress bar fill retains matcha green as a subtle accent.
+- **Issuer tracking:** `issuedBy` column on tickets table stores the username of who created a courtesy ticket. TicketsPage shows a "by {username}" badge next to the "Courtesy" badge.
+- **"M" logo removed:** Circle badge with "M" removed from all nav components (AppLayout sidebar, mobile header, hamburger drawer, Dashboard).
 - **M8 complete:** Shared AppLayout, unified navigation, scanner restyled
-  - Extracted shared `AppLayout` component (`client/src/components/AppLayout.tsx`) with sidebar (desktop) + hamburger drawer (mobile)
-  - All sub-pages (Scanner, Tickets, Courtesy, Admin Users) now use AppLayout instead of "Back" arrow headers
-  - Scanner page uses dashboard color palette (bg-background, bg-card, text-foreground, border-card-border) — matcha green (#7a9956) kept for accent buttons, progress bar, tab highlights
-  - Scanner page no longer has its own `useTheme` hook — uses global theme from App.tsx
-  - Tickets page desktop: sidebar + rounded card container with search/filter/list
-  - Courtesy page desktop: sidebar + card form with heading
-  - Admin Users page desktop: sidebar + card-based layout
-  - Mobile drawer shows active page highlight, user info, theme toggle, sign out
-  - Desktop sidebar shows active page highlight with bg-sidebar-accent
-  - Non-admin users only see Scanner and Courtesy in nav (both sidebar and drawer)
+  - Extracted shared `AppLayout` component with sidebar (desktop) + hamburger drawer (mobile)
+  - All sub-pages use AppLayout instead of "Back" arrow headers
+  - Non-admin users only see Scanner and Courtesy in nav
 - **M7 complete:** Authentication system + dashboard mobile redesign
 
 ## Previous Milestones
@@ -109,7 +105,7 @@ Types: Members, General, VIP
 ## CSS Theme
 - Palette: lilac/blue/yellow soft (modern dashboard style)
 - Primary: purple (hsl 250 72% 64%)
-- Scanner accent: Matcha green (#7a9956)
+- Scanner accent: Primary purple (progress bar only retains matcha green #7a9956)
 - Cards: rounded-3xl, shadow-card, border-card-border
 - Sidebar: 88px, centered icons, rounded-[32px] (desktop only, hidden on mobile)
 - Mobile: hamburger menu + slide-out drawer

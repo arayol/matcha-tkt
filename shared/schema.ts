@@ -48,6 +48,7 @@ export const tickets = pgTable("tickets", {
   qrData: text("qr_data").unique(),
   ticketUrl: text("ticket_url").unique(),
   status: text("status").notNull().default("valid"),
+  issuedBy: text("issued_by"),
   purchasedAt: timestamp("purchased_at").defaultNow(),
   usedAt: timestamp("used_at"),
 });

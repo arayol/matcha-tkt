@@ -227,8 +227,8 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
 
             {state === "idle" && (
               <div className="flex-1 flex flex-col items-center justify-center p-6 gap-5" data-testid="state-idle">
-                <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-[#7a9956]/10 dark:bg-[#7a9956]/15">
-                  <ScanLine className="h-10 w-10 text-[#7a9956]" />
+                <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10 dark:bg-primary/15">
+                  <ScanLine className="h-10 w-10 text-primary" />
                 </div>
                 <div className="text-center space-y-1.5">
                   <h1 className="text-xl font-semibold">Ticket Scanner</h1>
@@ -238,7 +238,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
                 </div>
                 <button
                   onClick={startScanner}
-                  className="flex items-center gap-2.5 bg-[#7a9956] text-white px-7 py-3.5 rounded-2xl font-semibold text-sm shadow-lg active:scale-95 transition-transform"
+                  className="flex items-center gap-2.5 bg-primary text-primary-foreground px-7 py-3.5 rounded-2xl font-semibold text-sm shadow-lg active:scale-95 transition-transform"
                   data-testid="button-start-scan"
                 >
                   <Camera className="h-5 w-5" />
@@ -250,7 +250,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
             {state === "scanning" && (
               <div className="p-4 border-t border-card-border bg-card">
                 <div className="flex items-center gap-2 justify-center mb-3">
-                  <div className="h-2 w-2 rounded-full bg-[#7a9956] animate-pulse" />
+                  <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
                   <p className="text-sm font-medium">Scanning for QR code...</p>
                 </div>
                 <button
@@ -265,7 +265,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
 
             {state === "loading" && (
               <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6" data-testid="state-loading">
-                <div className="h-10 w-10 rounded-full border-3 border-[#7a9956] border-t-transparent animate-spin" />
+                <div className="h-10 w-10 rounded-full border-3 border-primary border-t-transparent animate-spin" />
                 <p className="font-medium text-sm text-muted-foreground">Validating ticket...</p>
               </div>
             )}
@@ -280,8 +280,8 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
 
                 <div className="rounded-2xl p-4 space-y-2.5 border border-card-border bg-card" data-testid="result-card">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#7a9956]/15">
-                      <Ticket className="h-4 w-4 text-[#7a9956]" />
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15">
+                      <Ticket className="h-4 w-4 text-primary" />
                     </div>
                     <div>
                       <p className="font-semibold text-sm" data-testid="result-name">{result.ticket?.purchaserName}</p>
@@ -305,7 +305,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
 
                 <button
                   onClick={handleScanNext}
-                  className="flex items-center justify-center gap-2 bg-[#7a9956] text-white py-3 rounded-2xl font-semibold text-sm shadow-lg active:scale-95 transition-transform"
+                  className="flex items-center justify-center gap-2 bg-primary text-primary-foreground py-3 rounded-2xl font-semibold text-sm shadow-lg active:scale-95 transition-transform"
                   data-testid="button-scan-next"
                 >
                   <RefreshCw className="h-4 w-4" />
@@ -342,7 +342,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
 
                 <button
                   onClick={handleScanNext}
-                  className="flex items-center justify-center gap-2 bg-[#7a9956] text-white py-3 rounded-2xl font-semibold text-sm shadow-lg active:scale-95 transition-transform"
+                  className="flex items-center justify-center gap-2 bg-primary text-primary-foreground py-3 rounded-2xl font-semibold text-sm shadow-lg active:scale-95 transition-transform"
                   data-testid="button-scan-next-used"
                 >
                   <RefreshCw className="h-4 w-4" />
@@ -363,7 +363,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
 
                 <button
                   onClick={handleScanNext}
-                  className="flex items-center justify-center gap-2 bg-[#7a9956] text-white py-3 rounded-2xl font-semibold text-sm shadow-lg active:scale-95 transition-transform"
+                  className="flex items-center justify-center gap-2 bg-primary text-primary-foreground py-3 rounded-2xl font-semibold text-sm shadow-lg active:scale-95 transition-transform"
                   data-testid="button-scan-next-invalid"
                 >
                   <RefreshCw className="h-4 w-4" />
@@ -398,7 +398,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
                 </div>
                 <button
                   onClick={startScanner}
-                  className="flex items-center gap-2 py-2.5 px-5 rounded-xl bg-[#7a9956] text-white text-sm font-medium active:scale-95 transition-transform"
+                  className="flex items-center gap-2 py-2.5 px-5 rounded-xl bg-primary text-primary-foreground text-sm font-medium active:scale-95 transition-transform"
                   data-testid="button-retry-camera"
                 >
                   <RefreshCw className="h-4 w-4" />
@@ -467,7 +467,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
                     onClick={() => setGuestFilter(f)}
                     className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
                       guestFilter === f
-                        ? "bg-[#7a9956] text-white"
+                        ? "bg-primary text-primary-foreground"
                         : "bg-muted/40 text-muted-foreground hover:bg-muted/60"
                     }`}
                     data-testid={`filter-${f}`}
@@ -495,12 +495,12 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
                       data-testid={`guest-item-${guest.id}`}
                     >
                       <div className={`flex h-9 w-9 items-center justify-center rounded-xl flex-shrink-0 ${
-                        guest.status === "used" ? "bg-green-500/15" : "bg-[#7a9956]/15"
+                        guest.status === "used" ? "bg-green-500/15" : "bg-primary/15"
                       }`}>
                         {guest.status === "used" ? (
                           <CheckCircle2 className="h-4 w-4 text-green-500" />
                         ) : (
-                          <Ticket className="h-4 w-4 text-[#7a9956]" />
+                          <Ticket className="h-4 w-4 text-primary" />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -511,7 +511,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
                         <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${
                           guest.status === "used"
                             ? "bg-green-50 text-green-700 dark:bg-green-950/50 dark:text-green-400"
-                            : "bg-[#7a9956]/10 text-[#5a7340] dark:bg-[#7a9956]/15 dark:text-[#7a9956]"
+                            : "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary"
                         }`} data-testid={`guest-status-${guest.id}`}>
                           {guest.status === "used" ? "Arrived" : "Pending"}
                         </span>
@@ -544,7 +544,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
             }}
             className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors ${
               activeTab === tab.id
-                ? "text-[#7a9956]"
+                ? "text-primary"
                 : "text-muted-foreground hover:text-foreground"
             }`}
             data-testid={`tab-${tab.id}`}
