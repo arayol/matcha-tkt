@@ -24,9 +24,9 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4" data-testid="login-page">
       <div className="w-full max-w-sm space-y-6">
-        <div className="text-center space-y-3">
+        <div className="text-center space-y-5">
           <img src={matchaLogo} alt="Matcha On Ice" className="h-24 w-auto mx-auto" data-testid="img-logo" />
-          <p className="text-sm text-muted-foreground mt-1">Ticket Management System</p>
+          <p className="text-sm text-muted-foreground text-center">Ticket Management System</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
