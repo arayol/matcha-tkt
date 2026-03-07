@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Lock, User, AlertCircle, Eye, EyeOff } from "lucide-react";
+import matchaLogo from "@assets/matcha-logo_1772825112655.png";
 
 interface LoginPageProps {
   onLogin: (username: string, password: string) => Promise<boolean>;
@@ -24,13 +25,8 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
     <div className="min-h-screen flex items-center justify-center bg-background p-4" data-testid="login-page">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-3">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-2xl font-bold mx-auto shadow-soft">
-            M
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-login-title">Matcha On Ice</h1>
-            <p className="text-sm text-muted-foreground mt-1">Ticket Management System</p>
-          </div>
+          <img src={matchaLogo} alt="Matcha On Ice" className="h-24 w-auto mx-auto" data-testid="img-logo" />
+          <p className="text-sm text-muted-foreground mt-1">Ticket Management System</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
