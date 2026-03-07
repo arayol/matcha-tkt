@@ -1,4 +1,4 @@
-// Gmail integration via Replit connector (google-mail OAuth)
+// Gmail integration connector (google-mail OAuth)
 // Uses getUncachableGmailClient() — never cache, tokens expire
 import { google } from "googleapis";
 import { generateTicketPDF } from "./pdfGenerator";
@@ -193,7 +193,7 @@ function buildTicketEmailHtml(params: {
     }
 
     .header {
-      background-color: #000000;
+      background-color: #352d17;
       padding: 48px 48px 40px;
       text-align: center;
       position: relative;
@@ -456,13 +456,13 @@ function buildTicketEmailHtml(params: {
     }
 
     .footer {
-      background: #000000;
+      background: #352d17;
       padding: 36px 48px;
       text-align: center;
     }
 
     .footer img.logo-footer {
-      width: 160px;
+      width: 220px;
       opacity: 0.7;
       margin-bottom: 20px;
     }
@@ -492,8 +492,8 @@ function buildTicketEmailHtml(params: {
     <div class="email-container">
 
       <!-- HEADER -->
-      <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#000000" style="background-color:#000000;">
-        <tr><td class="header" style="background-color:#000000;">
+      <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#352d17" style="background-color:#352d17;">
+        <tr><td class="header" style="background-color:#352d17;">
           <img class="logo" src="cid:matcha-logo" alt="Matcha On Ice Social Club" />
           <div class="header-divider"></div>
         </td></tr>
@@ -573,8 +573,8 @@ function buildTicketEmailHtml(params: {
       </div><!-- /body-content -->
 
       <!-- FOOTER -->
-      <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#000000" style="background-color:#000000;">
-        <tr><td class="footer" style="background-color:#000000;">
+      <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#352d17" style="background-color:#352d17;">
+        <tr><td class="footer" style="background-color:#352d17;">
           <img class="logo-footer" src="cid:matcha-logo" alt="Matcha On Ice" />
           <div class="footer-divider"></div>
           <div class="footer-text">
