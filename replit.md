@@ -3,21 +3,19 @@
 ## About
 Ticket management system for fitness events in San Diego, CA. Includes Stripe integration for automated sales, QR codes, unique ticket URLs, admin dashboard, courtesy ticket generation, and Gmail OAuth email delivery.
 
-## Status: Marco M7 - Auth + Mobile Dashboard
+## Status: Marco M8 - Unified Navigation + Scanner Styling
+- **M8 complete:** Shared AppLayout, unified navigation, scanner restyled
+  - Extracted shared `AppLayout` component (`client/src/components/AppLayout.tsx`) with sidebar (desktop) + hamburger drawer (mobile)
+  - All sub-pages (Scanner, Tickets, Courtesy, Admin Users) now use AppLayout instead of "Back" arrow headers
+  - Scanner page uses dashboard color palette (bg-background, bg-card, text-foreground, border-card-border) — matcha green (#7a9956) kept for accent buttons, progress bar, tab highlights
+  - Scanner page no longer has its own `useTheme` hook — uses global theme from App.tsx
+  - Tickets page desktop: sidebar + rounded card container with search/filter/list
+  - Courtesy page desktop: sidebar + card form with heading
+  - Admin Users page desktop: sidebar + card-based layout
+  - Mobile drawer shows active page highlight, user info, theme toggle, sign out
+  - Desktop sidebar shows active page highlight with bg-sidebar-accent
+  - Non-admin users only see Scanner and Courtesy in nav (both sidebar and drawer)
 - **M7 complete:** Authentication system + dashboard mobile redesign
-  - Role-based auth: `adm` (full access) and `user` (scanner + courtesy only)
-  - Login page with username/password, show/hide password, error handling
-  - Express-session + passport-local auth with session persistence
-  - Default admin seed: `adm` / `adm99`
-  - Dashboard hamburger menu (mobile) with slide-out drawer
-  - Dark mode toggle on both desktop sidebar and mobile header
-  - Reorganized stat cards: Total Tickets, Valid/Used, General Admission, Members
-  - Removed Revenue and Events stat cards from dashboard
-  - Separate Tickets page (`/tickets`) with search, filter tabs (All/Valid/Used/Courtesy/Cancelled)
-  - Separate Courtesy page (`/courtesy`) with mobile-optimized form
-  - Admin User Management page (`/admin/users`) — create, delete, change roles
-  - Courtesy ticket bug fixed (sends purchaserName/purchaserEmail correctly)
-  - All API routes protected with requireAuth/requireAdmin middleware
 
 ## Previous Milestones
 - **M6:** Full mobile scanner app redesign (3-tab UI, dark mode, live stats, guest list, PWA)
@@ -49,6 +47,7 @@ Ticket management system for fitness events in San Diego, CA. Includes Stripe in
 - `server/emailService.ts` — Gmail OAuth email (CID logo, black header/footer, PDF attachment)
 - `server/matcha-logo.png` — Transparent-bg PNG logo (CID attachment in emails)
 - `shared/schema.ts` — Database schema (users with role field, events, tickets)
+- `client/src/components/AppLayout.tsx` — Shared layout with sidebar (desktop) + hamburger drawer (mobile)
 - `client/src/App.tsx` — Router with auth check, role-based route protection
 - `client/src/lib/auth.ts` — useAuth hook (login, logout, session check)
 - `client/src/pages/LoginPage.tsx` — Login form page

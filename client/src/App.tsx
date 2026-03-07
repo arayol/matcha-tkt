@@ -30,6 +30,13 @@ function useThemeGlobal() {
   return { dark, toggle: () => setDark((d) => !d) };
 }
 
+interface SharedProps {
+  dark: boolean;
+  toggleTheme: () => void;
+  onLogout: () => void;
+  user: { id: string; username: string; role: string };
+}
+
 function AppContent() {
   const { user, isLoading, login, logout, error } = useAuth();
   const { dark, toggle: toggleTheme } = useThemeGlobal();
@@ -49,13 +56,14 @@ function AppContent() {
   }
 
   const isAdmin = user?.role === "adm";
+  const shared: SharedProps | null = user ? { dark, toggleTheme, onLogout: logout, user } : null;
 
   return (
     <>
       <Switch>
         <Route path="/ticket/:slug" component={TicketPage} />
 
-        {!user ? (
+        {!user || !shared ? (
           <Route>
             <LoginPage onLogin={login} error={error} />
           </Route>
@@ -63,25 +71,27 @@ function AppContent() {
           <>
             <Route path="/">
               {isAdmin ? (
-                <Dashboard dark={dark} toggleTheme={toggleTheme} onLogout={logout} user={user} />
+                <Dashboard {...shared} />
               ) : (
                 () => { navigate("/scan"); return null; }
               )}
             </Route>
-            <Route path="/scan" component={ScannerPage} />
+            <Route path="/scan">
+              <ScannerPage {...shared} />
+            </Route>
             <Route path="/tickets">
               {isAdmin ? (
-                <TicketsPage dark={dark} toggleTheme={toggleTheme} />
+                <TicketsPage {...shared} />
               ) : (
                 () => { navigate("/scan"); return null; }
               )}
             </Route>
             <Route path="/courtesy">
-              <CourtesyPage dark={dark} toggleTheme={toggleTheme} />
+              <CourtesyPage {...shared} />
             </Route>
             <Route path="/admin/users">
               {isAdmin ? (
-                <AdminUsersPage dark={dark} toggleTheme={toggleTheme} currentUserId={user.id} />
+                <AdminUsersPage {...shared} />
               ) : (
                 () => { navigate("/scan"); return null; }
               )}

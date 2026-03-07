@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Link } from "wouter";
 import { Html5Qrcode } from "html5-qrcode";
 import {
   ScanLine, CheckCircle2, XCircle, AlertTriangle,
-  ArrowLeft, Camera, RefreshCw, Ticket, Moon, Sun,
-  Clock, Users, Search, UserCheck, ChevronDown
+  Camera, RefreshCw, Ticket,
+  Clock, Users, Search, UserCheck,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import AppLayout from "@/components/AppLayout";
 
 type ScanState = "idle" | "scanning" | "loading" | "success" | "error_used" | "error_invalid" | "error_camera";
 type TabId = "scanner" | "activity" | "guests";
@@ -51,23 +51,6 @@ interface ScannerStats {
   }[];
 }
 
-function useTheme() {
-  const [dark, setDark] = useState(() => {
-    if (typeof window === "undefined") return true;
-    const stored = localStorage.getItem("moi-scanner-theme");
-    return stored ? stored === "dark" : true;
-  });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-    localStorage.setItem("moi-scanner-theme", dark ? "dark" : "light");
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", dark ? "#0a0a0a" : "#f5f3ff");
-  }, [dark]);
-
-  return { dark, toggle: () => setDark((d) => !d) };
-}
-
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -78,7 +61,14 @@ function timeAgo(dateStr: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export default function ScannerPage() {
+interface ScannerPageProps {
+  dark: boolean;
+  toggleTheme: () => void;
+  onLogout: () => void;
+  user: { id: string; username: string; role: string };
+}
+
+export default function ScannerPage({ dark, toggleTheme, onLogout, user }: ScannerPageProps) {
   const [state, setState] = useState<ScanState>("idle");
   const [result, setResult] = useState<ValidationResult | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("scanner");
@@ -87,7 +77,6 @@ export default function ScannerPage() {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isScanningRef = useRef(false);
   const mountedRef = useRef(true);
-  const { dark, toggle: toggleTheme } = useTheme();
   const queryClient = useQueryClient();
 
   const { data: stats } = useQuery<ScannerStats>({
@@ -211,41 +200,18 @@ export default function ScannerPage() {
     return matchesSearch && matchesFilter;
   });
 
-  return (
-    <div className={`min-h-screen flex flex-col ${dark ? "bg-[#0a0a0a] text-white" : "bg-gray-50 text-gray-900"}`} data-testid="scanner-page">
-      <header className={`flex items-center justify-between px-4 pt-2 pb-2 border-b ${dark ? "bg-[#111] border-[#222]" : "bg-white border-gray-200"}`}>
-        <Link href="/" className={`flex items-center gap-1.5 text-sm ${dark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-900"} transition-colors`} data-testid="link-back-dashboard">
-          <ArrowLeft className="h-4 w-4" />
-          <span className="hidden sm:inline">Dashboard</span>
-        </Link>
-
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#7a9956] text-white text-xs font-bold">
-            M
-          </div>
-          <span className="font-semibold text-sm tracking-tight">MOI Scanner</span>
-        </div>
-
-        <button
-          onClick={toggleTheme}
-          className={`p-2 rounded-xl transition-colors ${dark ? "text-gray-400 hover:text-white hover:bg-[#222]" : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"}`}
-          data-testid="button-toggle-theme"
-          aria-label="Toggle theme"
-        >
-          {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-        </button>
-      </header>
-
-      <div className={`px-4 py-2.5 border-b ${dark ? "bg-[#111] border-[#222]" : "bg-white border-gray-200"}`}>
+  const scannerContent = (
+    <div className="flex flex-col min-h-[calc(100vh-140px)] md:min-h-0" data-testid="scanner-page">
+      <div className="px-4 py-2.5 border-b border-card-border rounded-t-3xl bg-card">
         <div className="flex items-center justify-between mb-1.5">
-          <span className={`text-xs font-medium ${dark ? "text-gray-400" : "text-gray-500"}`}>
+          <span className="text-xs font-medium text-muted-foreground">
             {checkedIn} / {total} checked in
           </span>
-          <span className={`text-xs font-medium ${dark ? "text-gray-400" : "text-gray-500"}`}>
+          <span className="text-xs font-medium text-muted-foreground">
             {remaining} remaining
           </span>
         </div>
-        <div className={`h-2 rounded-full overflow-hidden ${dark ? "bg-[#222]" : "bg-gray-200"}`}>
+        <div className="h-2 rounded-full overflow-hidden bg-muted">
           <div
             className="h-full rounded-full bg-[#7a9956] transition-all duration-500"
             style={{ width: `${progress}%` }}
@@ -261,12 +227,12 @@ export default function ScannerPage() {
 
             {state === "idle" && (
               <div className="flex-1 flex flex-col items-center justify-center p-6 gap-5" data-testid="state-idle">
-                <div className={`flex h-20 w-20 items-center justify-center rounded-2xl ${dark ? "bg-[#7a9956]/15" : "bg-[#7a9956]/10"}`}>
+                <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-[#7a9956]/10 dark:bg-[#7a9956]/15">
                   <ScanLine className="h-10 w-10 text-[#7a9956]" />
                 </div>
                 <div className="text-center space-y-1.5">
                   <h1 className="text-xl font-semibold">Ticket Scanner</h1>
-                  <p className={`text-sm max-w-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>
+                  <p className="text-sm max-w-xs text-muted-foreground">
                     Point the camera at a QR code to validate entry.
                   </p>
                 </div>
@@ -282,14 +248,14 @@ export default function ScannerPage() {
             )}
 
             {state === "scanning" && (
-              <div className={`p-4 border-t ${dark ? "bg-[#111] border-[#222]" : "bg-white border-gray-200"}`}>
+              <div className="p-4 border-t border-card-border bg-card">
                 <div className="flex items-center gap-2 justify-center mb-3">
                   <div className="h-2 w-2 rounded-full bg-[#7a9956] animate-pulse" />
                   <p className="text-sm font-medium">Scanning for QR code...</p>
                 </div>
                 <button
                   onClick={async () => { await stopScanner(); setState("idle"); }}
-                  className={`w-full py-2.5 rounded-xl border text-sm transition-colors ${dark ? "border-[#333] text-gray-400 hover:bg-[#1a1a1a]" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                  className="w-full py-2.5 rounded-xl border border-card-border text-sm text-muted-foreground hover:bg-muted/30 transition-colors"
                   data-testid="button-cancel-scan"
                 >
                   Cancel
@@ -300,37 +266,37 @@ export default function ScannerPage() {
             {state === "loading" && (
               <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6" data-testid="state-loading">
                 <div className="h-10 w-10 rounded-full border-3 border-[#7a9956] border-t-transparent animate-spin" />
-                <p className={`font-medium text-sm ${dark ? "text-gray-400" : "text-gray-500"}`}>Validating ticket...</p>
+                <p className="font-medium text-sm text-muted-foreground">Validating ticket...</p>
               </div>
             )}
 
             {state === "success" && result && (
               <div className="flex-1 flex flex-col p-4 gap-3" data-testid="state-success">
-                <div className={`rounded-2xl p-5 flex flex-col items-center gap-2 text-center ${dark ? "bg-green-950/40 border border-green-800/50" : "bg-green-50 border border-green-200"}`}>
+                <div className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center bg-green-50 border border-green-200 dark:bg-green-950/40 dark:border-green-800/50">
                   <CheckCircle2 className="h-14 w-14 text-green-500" />
                   <p className="text-xl font-bold text-green-500">VALID</p>
-                  <p className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>Ticket accepted — let them in!</p>
+                  <p className="text-xs text-muted-foreground">Ticket accepted — let them in!</p>
                 </div>
 
-                <div className={`rounded-2xl p-4 space-y-2.5 ${dark ? "bg-[#161616] border border-[#222]" : "bg-white border border-gray-200"}`} data-testid="result-card">
+                <div className="rounded-2xl p-4 space-y-2.5 border border-card-border bg-card" data-testid="result-card">
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#7a9956]/15">
                       <Ticket className="h-4 w-4 text-[#7a9956]" />
                     </div>
                     <div>
                       <p className="font-semibold text-sm" data-testid="result-name">{result.ticket?.purchaserName}</p>
-                      <p className={`text-xs ${dark ? "text-gray-500" : "text-gray-400"}`} data-testid="result-email">{result.ticket?.purchaserEmail}</p>
+                      <p className="text-xs text-muted-foreground" data-testid="result-email">{result.ticket?.purchaserEmail}</p>
                     </div>
                   </div>
-                  <div className={`h-px ${dark ? "bg-[#222]" : "bg-gray-100"}`} />
+                  <div className="h-px bg-card-border" />
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <p className={dark ? "text-gray-500" : "text-gray-400"}>Type</p>
+                      <p className="text-muted-foreground">Type</p>
                       <p className="font-medium" data-testid="result-type">{result.ticket?.ticketType}</p>
                     </div>
                     {result.event && (
                       <div>
-                        <p className={dark ? "text-gray-500" : "text-gray-400"}>Event</p>
+                        <p className="text-muted-foreground">Event</p>
                         <p className="font-medium" data-testid="result-event">{result.event.date} · {result.event.time}</p>
                       </div>
                     )}
@@ -350,10 +316,10 @@ export default function ScannerPage() {
 
             {state === "error_used" && result && (
               <div className="flex-1 flex flex-col p-4 gap-3" data-testid="state-error-used">
-                <div className={`rounded-2xl p-5 flex flex-col items-center gap-2 text-center ${dark ? "bg-yellow-950/40 border border-yellow-800/50" : "bg-yellow-50 border border-yellow-200"}`}>
+                <div className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center bg-yellow-50 border border-yellow-200 dark:bg-yellow-950/40 dark:border-yellow-800/50">
                   <AlertTriangle className="h-14 w-14 text-yellow-500" />
                   <p className="text-xl font-bold text-yellow-500">ALREADY USED</p>
-                  <p className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>
+                  <p className="text-xs text-muted-foreground">
                     {result.ticket?.usedAt
                       ? `Used ${timeAgo(result.ticket.usedAt)}`
                       : "This ticket has already been scanned"}
@@ -361,14 +327,14 @@ export default function ScannerPage() {
                 </div>
 
                 {result.ticket && (
-                  <div className={`rounded-2xl p-4 ${dark ? "bg-[#161616] border border-[#222]" : "bg-white border border-gray-200"}`} data-testid="result-card-used">
+                  <div className="rounded-2xl p-4 border border-card-border bg-card" data-testid="result-card-used">
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-yellow-500/15">
                         <Ticket className="h-4 w-4 text-yellow-500" />
                       </div>
                       <div>
                         <p className="font-semibold text-sm" data-testid="result-used-name">{result.ticket.purchaserName}</p>
-                        <p className={`text-xs ${dark ? "text-gray-500" : "text-gray-400"}`}>{result.ticket.ticketType}</p>
+                        <p className="text-xs text-muted-foreground">{result.ticket.ticketType}</p>
                       </div>
                     </div>
                   </div>
@@ -387,10 +353,10 @@ export default function ScannerPage() {
 
             {state === "error_invalid" && (
               <div className="flex-1 flex flex-col p-4 gap-3" data-testid="state-error-invalid">
-                <div className={`rounded-2xl p-5 flex flex-col items-center gap-2 text-center ${dark ? "bg-red-950/40 border border-red-800/50" : "bg-red-50 border border-red-200"}`}>
+                <div className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center bg-red-50 border border-red-200 dark:bg-red-950/40 dark:border-red-800/50">
                   <XCircle className="h-14 w-14 text-red-500" />
                   <p className="text-xl font-bold text-red-500">INVALID</p>
-                  <p className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>
+                  <p className="text-xs text-muted-foreground">
                     {result?.error || "This QR code is not a valid ticket."}
                   </p>
                 </div>
@@ -406,7 +372,7 @@ export default function ScannerPage() {
 
                 <button
                   onClick={() => { setResult(null); setState("idle"); }}
-                  className={`py-2.5 rounded-xl border text-sm transition-colors ${dark ? "border-[#333] text-gray-400 hover:bg-[#1a1a1a]" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                  className="py-2.5 rounded-xl border border-card-border text-sm text-muted-foreground hover:bg-muted/30 transition-colors"
                   data-testid="button-back-idle"
                 >
                   Back
@@ -416,17 +382,17 @@ export default function ScannerPage() {
 
             {state === "error_camera" && (
               <div className="flex-1 flex flex-col items-center justify-center p-6 gap-5" data-testid="state-error-camera">
-                <div className={`flex h-20 w-20 items-center justify-center rounded-2xl ${dark ? "bg-red-950/30" : "bg-red-50"}`}>
+                <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-red-50 dark:bg-red-950/30">
                   <Camera className="h-10 w-10 text-red-500" />
                 </div>
                 <div className="text-center space-y-1.5">
                   <h2 className="text-lg font-semibold">Camera Access Required</h2>
-                  <p className={`text-sm max-w-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>
+                  <p className="text-sm max-w-xs text-muted-foreground">
                     Please allow camera access in your browser settings.
                   </p>
                 </div>
-                <div className={`rounded-xl p-3 text-xs space-y-0.5 max-w-xs ${dark ? "bg-[#161616] border border-[#222] text-gray-400" : "bg-gray-50 border border-gray-200 text-gray-500"}`}>
-                  <p className={`font-medium ${dark ? "text-white" : "text-gray-900"}`}>How to enable:</p>
+                <div className="rounded-xl p-3 text-xs space-y-0.5 max-w-xs border border-card-border bg-card text-muted-foreground">
+                  <p className="font-medium text-foreground">How to enable:</p>
                   <p>iOS: Settings → Safari → Camera → Allow</p>
                   <p>Android: Site Settings → Camera → Allow</p>
                 </div>
@@ -445,22 +411,22 @@ export default function ScannerPage() {
 
         {activeTab === "activity" && (
           <div className="flex-1 overflow-y-auto" data-testid="tab-activity">
-            <div className={`px-4 py-3 border-b ${dark ? "border-[#222]" : "border-gray-200"}`}>
+            <div className="px-4 py-3 border-b border-card-border">
               <h2 className="font-semibold text-sm">Scan History</h2>
-              <p className={`text-xs ${dark ? "text-gray-500" : "text-gray-400"}`}>{stats?.recentScans.length ?? 0} recent scans</p>
+              <p className="text-xs text-muted-foreground">{stats?.recentScans.length ?? 0} recent scans</p>
             </div>
 
             {(stats?.recentScans ?? []).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <Clock className={`h-10 w-10 ${dark ? "text-gray-700" : "text-gray-300"}`} />
-                <p className={`text-sm ${dark ? "text-gray-500" : "text-gray-400"}`}>No scans yet</p>
+                <Clock className="h-10 w-10 text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">No scans yet</p>
               </div>
             ) : (
-              <div className="divide-y divide-transparent">
+              <div className="divide-y divide-card-border">
                 {stats!.recentScans.map((scan) => (
                   <div
                     key={scan.id}
-                    className={`flex items-center gap-3 px-4 py-3 ${dark ? "hover:bg-[#161616]" : "hover:bg-gray-50"} transition-colors`}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors"
                     data-testid={`scan-item-${scan.id}`}
                   >
                     <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-green-500/15 flex-shrink-0">
@@ -468,9 +434,9 @@ export default function ScannerPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{scan.purchaserName}</p>
-                      <p className={`text-xs ${dark ? "text-gray-500" : "text-gray-400"}`}>{scan.ticketType}</p>
+                      <p className="text-xs text-muted-foreground">{scan.ticketType}</p>
                     </div>
-                    <span className={`text-xs flex-shrink-0 ${dark ? "text-gray-600" : "text-gray-400"}`}>
+                    <span className="text-xs flex-shrink-0 text-muted-foreground">
                       {timeAgo(scan.usedAt)}
                     </span>
                   </div>
@@ -482,15 +448,15 @@ export default function ScannerPage() {
 
         {activeTab === "guests" && (
           <div className="flex-1 flex flex-col overflow-hidden" data-testid="tab-guests">
-            <div className={`px-4 py-3 space-y-2.5 border-b ${dark ? "border-[#222]" : "border-gray-200"}`}>
+            <div className="px-4 py-3 space-y-2.5 border-b border-card-border">
               <div className="relative">
-                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 ${dark ? "text-gray-600" : "text-gray-400"}`} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="Search guests..."
                   value={guestSearch}
                   onChange={(e) => setGuestSearch(e.target.value)}
-                  className={`w-full pl-9 pr-3 py-2 rounded-xl text-sm outline-none transition-colors ${dark ? "bg-[#161616] border border-[#222] text-white placeholder-gray-600 focus:border-[#7a9956]" : "bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:border-[#7a9956]"}`}
+                  className="w-full pl-9 pr-3 py-2 rounded-xl text-sm outline-none transition-colors bg-muted/40 border border-card-border placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
                   data-testid="input-guest-search"
                 />
               </div>
@@ -502,9 +468,7 @@ export default function ScannerPage() {
                     className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
                       guestFilter === f
                         ? "bg-[#7a9956] text-white"
-                        : dark
-                        ? "bg-[#161616] text-gray-400 hover:text-white"
-                        : "bg-gray-100 text-gray-500 hover:text-gray-900"
+                        : "bg-muted/40 text-muted-foreground hover:bg-muted/60"
                     }`}
                     data-testid={`filter-${f}`}
                   >
@@ -517,17 +481,17 @@ export default function ScannerPage() {
             <div className="flex-1 overflow-y-auto">
               {filteredGuests.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-3">
-                  <Users className={`h-10 w-10 ${dark ? "text-gray-700" : "text-gray-300"}`} />
-                  <p className={`text-sm ${dark ? "text-gray-500" : "text-gray-400"}`}>
+                  <Users className="h-10 w-10 text-muted-foreground/30" />
+                  <p className="text-sm text-muted-foreground">
                     {guestSearch ? "No matching guests" : "No guests yet"}
                   </p>
                 </div>
               ) : (
-                <div>
+                <div className="divide-y divide-card-border">
                   {filteredGuests.map((guest) => (
                     <div
                       key={guest.id}
-                      className={`flex items-center gap-3 px-4 py-3 ${dark ? "hover:bg-[#161616]" : "hover:bg-gray-50"} transition-colors`}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors"
                       data-testid={`guest-item-${guest.id}`}
                     >
                       <div className={`flex h-9 w-9 items-center justify-center rounded-xl flex-shrink-0 ${
@@ -541,17 +505,17 @@ export default function ScannerPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{guest.purchaserName}</p>
-                        <p className={`text-xs truncate ${dark ? "text-gray-500" : "text-gray-400"}`}>{guest.purchaserEmail}</p>
+                        <p className="text-xs truncate text-muted-foreground">{guest.purchaserEmail}</p>
                       </div>
                       <div className="flex flex-col items-end flex-shrink-0">
                         <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${
                           guest.status === "used"
-                            ? dark ? "bg-green-950/50 text-green-400" : "bg-green-50 text-green-700"
-                            : dark ? "bg-[#7a9956]/15 text-[#7a9956]" : "bg-[#7a9956]/10 text-[#5a7340]"
+                            ? "bg-green-50 text-green-700 dark:bg-green-950/50 dark:text-green-400"
+                            : "bg-[#7a9956]/10 text-[#5a7340] dark:bg-[#7a9956]/15 dark:text-[#7a9956]"
                         }`} data-testid={`guest-status-${guest.id}`}>
                           {guest.status === "used" ? "Arrived" : "Pending"}
                         </span>
-                        <span className={`text-[10px] mt-0.5 ${dark ? "text-gray-600" : "text-gray-400"}`}>
+                        <span className="text-[10px] mt-0.5 text-muted-foreground">
                           {guest.ticketType}
                         </span>
                       </div>
@@ -564,7 +528,7 @@ export default function ScannerPage() {
         )}
       </main>
 
-      <nav className={`flex border-t safe-bottom ${dark ? "bg-[#111] border-[#222]" : "bg-white border-gray-200"}`}>
+      <nav className="flex border-t border-card-border bg-card safe-bottom md:rounded-b-3xl">
         {([
           { id: "scanner" as TabId, icon: ScanLine, label: "Scanner" },
           { id: "activity" as TabId, icon: Clock, label: "Activity" },
@@ -581,18 +545,21 @@ export default function ScannerPage() {
             className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors ${
               activeTab === tab.id
                 ? "text-[#7a9956]"
-                : dark ? "text-gray-600 hover:text-gray-400" : "text-gray-400 hover:text-gray-600"
+                : "text-muted-foreground hover:text-foreground"
             }`}
             data-testid={`tab-${tab.id}`}
           >
             <tab.icon className="h-5 w-5" />
             <span className="text-[10px] font-medium">{tab.label}</span>
-            {tab.id === "activity" && (stats?.recentScans.length ?? 0) > 0 && (
-              <span className="absolute -top-0.5 -right-0.5" />
-            )}
           </button>
         ))}
       </nav>
     </div>
+  );
+
+  return (
+    <AppLayout dark={dark} toggleTheme={toggleTheme} onLogout={onLogout} user={user} activePath="/scan">
+      {scannerContent}
+    </AppLayout>
   );
 }
