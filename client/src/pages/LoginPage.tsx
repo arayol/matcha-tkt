@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Lock, User, AlertCircle, Eye, EyeOff } from "lucide-react";
-import matchaLogo from "@assets/matcha-logo_1772825112655.png";
+import matchaLogo from "@assets/Matcha_Logo_Transp_1772922336195.png";
 
 interface LoginPageProps {
   onLogin: (username: string, password: string) => Promise<boolean>;
