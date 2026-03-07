@@ -1,5 +1,7 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
+import passport from "passport";
+import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 import { generateTicketQR } from "./qrcode";
 import { generateTicketPDF } from "./pdfGenerator";
@@ -7,16 +9,64 @@ import { sendTicketEmail } from "./emailService";
 import { insertTicketSchema } from "@shared/schema";
 import { z } from "zod";
 
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (req.isAuthenticated()) return next();
+  res.status(401).json({ error: "Not authenticated" });
+}
+
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.isAuthenticated() && (req.user as any)?.role === "adm") return next();
+  res.status(403).json({ error: "Admin access required" });
+}
+
+async function seedAdminUser() {
+  const existing = await storage.getUserByUsername("adm");
+  if (!existing) {
+    await storage.createUser({ username: "adm", password: "adm99", role: "adm" });
+    console.log("🔑 Admin user created (adm/adm99)");
+  } else if (!existing.password.startsWith("$2")) {
+    const hashed = await bcrypt.hash(existing.password, 10);
+    await storage.updateUserPassword(existing.id, hashed);
+    console.log("🔑 Admin password migrated to bcrypt");
+  }
+}
+
 export async function registerRoutes(httpServer: Server, app: Express) {
+  await seedAdminUser();
+
+  app.post("/api/auth/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) return next(err);
+      if (!user) return res.status(401).json({ error: info?.message || "Invalid credentials" });
+      req.logIn(user, (err) => {
+        if (err) return next(err);
+        const { password, ...safeUser } = user;
+        res.json(safeUser);
+      });
+    })(req, res, next);
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.logout(() => {
+      res.json({ message: "Logged out" });
+    });
+  });
+
+  app.get("/api/auth/me", (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ error: "Not authenticated" });
+    const { password, ...safeUser } = req.user as any;
+    res.json(safeUser);
+  });
+
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
       message: "Matcha On Ice - Ticket Management System",
-      phase: "Marco M1 - Backend Core",
+      phase: "Marco M7 - Auth + Mobile",
     });
   });
 
-  app.get("/api/events", async (_req, res) => {
+  app.get("/api/events", requireAuth, async (_req, res) => {
     try {
       const eventList = await storage.listEvents();
       res.json(eventList);
@@ -25,7 +75,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  app.get("/api/tickets", async (_req, res) => {
+  app.get("/api/tickets", requireAdmin, async (_req, res) => {
     try {
       const ticketList = await storage.listTickets();
       res.json(ticketList);
@@ -34,7 +84,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  app.get("/api/tickets/:id", async (req, res) => {
+  app.get("/api/tickets/:id", requireAuth, async (req, res) => {
     try {
       const ticket = await storage.getTicket(req.params.id);
       if (!ticket) return res.status(404).json({ error: "Ticket not found" });
@@ -56,7 +106,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  app.post("/api/tickets/:id/validate", async (req, res) => {
+  app.post("/api/tickets/:id/validate", requireAuth, async (req, res) => {
     try {
       const ticket = await storage.getTicket(req.params.id);
       if (!ticket) return res.status(404).json({ error: "Ticket not found" });
@@ -78,7 +128,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  app.post("/api/tickets/validate-qr", async (req, res) => {
+  app.post("/api/tickets/validate-qr", requireAuth, async (req, res) => {
     try {
       const { qrData } = req.body;
       if (!qrData) return res.status(400).json({ error: "qrData is required" });
@@ -112,7 +162,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     ticketType: z.string().default("General"),
   });
 
-  app.post("/api/tickets/courtesy", async (req, res) => {
+  app.post("/api/tickets/courtesy", requireAuth, async (req, res) => {
     try {
       const parsed = courtesyTicketSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -169,7 +219,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  app.get("/api/scanner/stats", async (_req, res) => {
+  app.get("/api/scanner/stats", requireAuth, async (_req, res) => {
     try {
       const ticketList = await storage.listTickets();
       const totalTickets = ticketList.filter(t => t.status !== "cancelled").length;
@@ -204,7 +254,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  app.get("/api/stats", async (_req, res) => {
+  app.get("/api/stats", requireAdmin, async (_req, res) => {
     try {
       const ticketList = await storage.listTickets();
       const eventList = await storage.listEvents();
@@ -243,6 +293,66 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       });
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
+
+  app.get("/api/admin/users", requireAdmin, async (_req, res) => {
+    try {
+      const userList = await storage.listUsers();
+      const safeUsers = userList.map(({ password, ...u }) => u);
+      res.json(safeUsers);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  const createUserSchema = z.object({
+    username: z.string().min(1),
+    password: z.string().min(1),
+    role: z.enum(["adm", "user"]).default("user"),
+  });
+
+  app.post("/api/admin/users", requireAdmin, async (req, res) => {
+    try {
+      const parsed = createUserSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Invalid data", details: parsed.error.flatten() });
+
+      const existing = await storage.getUserByUsername(parsed.data.username);
+      if (existing) return res.status(409).json({ error: "Username already exists" });
+
+      const user = await storage.createUser(parsed.data);
+      const { password, ...safeUser } = user;
+      res.json(safeUser);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to create user" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const { role } = req.body;
+      if (!role || !["adm", "user"].includes(role)) return res.status(400).json({ error: "Invalid role" });
+
+      const updated = await storage.updateUserRole(req.params.id, role);
+      if (!updated) return res.status(404).json({ error: "User not found" });
+
+      const { password, ...safeUser } = updated;
+      res.json(safeUser);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+
+  app.delete("/api/admin/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as any;
+      if (currentUser.id === req.params.id) return res.status(400).json({ error: "Cannot delete your own account" });
+
+      const deleted = await storage.deleteUser(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "User not found" });
+      res.json({ message: "User deleted" });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to delete user" });
     }
   });
 }

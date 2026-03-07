@@ -1,5 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "./db";
+import bcrypt from "bcryptjs";
 import {
   users, events, tickets,
   type User, type InsertUser,
@@ -27,6 +28,11 @@ export interface IStorage {
   listTickets(): Promise<Ticket[]>;
   updateTicketStatus(id: string, status: string, usedAt?: Date): Promise<Ticket | undefined>;
   validateTicketAtomically(id: string): Promise<Ticket | undefined>;
+
+  listUsers(): Promise<User[]>;
+  deleteUser(id: string): Promise<boolean>;
+  updateUserRole(id: string, role: string): Promise<User | undefined>;
+  updateUserPassword(id: string, hashedPassword: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -41,7 +47,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
+    const hashedPassword = await bcrypt.hash(insertUser.password, 10);
+    const [user] = await db.insert(users).values({ ...insertUser, password: hashedPassword }).returning();
     return user;
   }
 
@@ -116,6 +123,24 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(tickets.id, id), eq(tickets.status, "valid")))
       .returning();
     return updated;
+  }
+
+  async listUsers(): Promise<User[]> {
+    return db.select().from(users);
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async updateUserRole(id: string, role: string): Promise<User | undefined> {
+    const [updated] = await db.update(users).set({ role }).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async updateUserPassword(id: string, hashedPassword: string): Promise<void> {
+    await db.update(users).set({ password: hashedPassword }).where(eq(users.id, id));
   }
 }
 
