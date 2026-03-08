@@ -66,7 +66,8 @@ Ticket management system for fitness events in San Diego, CA. Includes Stripe in
 - `events` — id, name, date, time, event_type, location, capacity, price_in_cents, stripe_product_id, active
 - `tickets` — id, event_id, purchaser_name, purchaser_email, ticket_type, stripe_session_id, stripe_payment_intent_id, qr_code, qr_data, ticket_url, status, issued_by, reconciliation_status, purchased_at, used_at
 - `csv_uploads` — id, file_name, uploaded_at, uploaded_by, record_count, status (active/reverted)
-- `hostinger_orders` — id, import_id, order_number, email, billing_name, phone, order_status, created_at, product_raw, parsed_event_date, parsed_event_time, parsed_ticket_type, parsed_class_name, skus, price, quantity, currency, subtotal, shipping, taxes, discount_code, discount_amount, gift_card, street_address, city, state, postal, payment_method, notes, order_type (ticket/vendor), reconciliation_status
+- `hostinger_orders` — id, import_id, order_number, email, billing_name, phone, order_status, created_at, product_raw, parsed_event_date, parsed_event_time, parsed_event_type, parsed_ticket_type, parsed_class_name, skus, price, quantity, currency, subtotal, shipping, taxes, discount_code, discount_amount, gift_card, street_address, city, state, postal, payment_method, notes, order_type (ticket/vendor), reconciliation_status
+- `event_date_names` — id, event_date (unique), event_name, created_at
 - `customers` — id, name, email, phone, street_address, city, state, postal, events_attended[], ticket_types[], created_at, updated_at
 
 ## API Endpoints
@@ -105,6 +106,9 @@ Ticket management system for fitness events in San Diego, CA. Includes Stripe in
 - `PATCH /api/admin/reconciliation/:id` — Edit individual order record
 - `GET /api/admin/reconciliation/export` — Export divergences as CSV file
 - `GET /api/admin/events/comparison` — Aggregated event comparison metrics
+- `GET /api/admin/event-date-names` — List event date name mappings
+- `POST /api/admin/event-date-names` — Create/update event date name {eventDate, eventName}
+- `DELETE /api/admin/event-date-names/:id` — Delete event date name mapping
 
 ## Auth Roles
 - `adm` — Full access: dashboard, tickets, courtesy, scanner, user management, CSV import, reconciliation, event comparison
@@ -122,8 +126,13 @@ Example: `Feb 26th, 6 PM - Members Event Ticket`
 Types: Members, General, VIP
 
 ## Hostinger CSV Product Field Parsing
-The Product field from Hostinger CSV concatenates: event name + date + time + ticket type + class name
-Parser extracts: parsedEventDate, parsedEventTime, parsedTicketType, parsedClassName, orderType (ticket/vendor)
+The "Product Names" field from Hostinger CSV follows format: `Date, Time EventType - TicketDetails`
+Examples:
+- `Feb 15th, 11:30 AM Event Ticket - Full Body Sculpt Class: Paulina Araujo` → date=Feb 15th, time=11:30 AM, eventType=Event Ticket, ticketType=Class Ticket
+- `Feb 15th, 10:00 - 2PM Event Ticket - General Admission` → date=Feb 15th, time=10:00 - 2PM, eventType=Event Ticket, ticketType=General Admission Ticket
+- `Feb 26th, 6 PM - Members Event Ticket` → date=Feb 26th, time=6 PM, eventType=Members Event, ticketType=Members Event Ticket
+Parser extracts: parsedEventDate, parsedEventTime, parsedEventType, parsedTicketType, parsedClassName, orderType (ticket/vendor)
+Events are identified by date (month + day). Admin can assign custom event names via the "Event Names by Date" section on the Reconciliation page (stored in event_date_names table).
 
 ## User Preferences
 - All app UI text, labels, and content must be in **English (US)**.

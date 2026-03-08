@@ -83,6 +83,7 @@ export const hostingerOrders = pgTable("hostinger_orders", {
   productRaw: text("product_raw"),
   parsedEventDate: text("parsed_event_date"),
   parsedEventTime: text("parsed_event_time"),
+  parsedEventType: text("parsed_event_type"),
   parsedTicketType: text("parsed_ticket_type"),
   parsedClassName: text("parsed_class_name"),
   skus: text("skus"),
@@ -127,3 +128,14 @@ export const customers = pgTable("customers", {
 export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
+
+export const eventDateNames = pgTable("event_date_names", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventDate: text("event_date").notNull().unique(),
+  eventName: text("event_name").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertEventDateNameSchema = createInsertSchema(eventDateNames).omit({ id: true, createdAt: true });
+export type InsertEventDateName = z.infer<typeof insertEventDateNameSchema>;
+export type EventDateName = typeof eventDateNames.$inferSelect;

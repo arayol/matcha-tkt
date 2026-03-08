@@ -2,13 +2,14 @@ import { eq, and, inArray, desc } from "drizzle-orm";
 import { db } from "./db";
 import bcrypt from "bcryptjs";
 import {
-  users, events, tickets, csvUploads, hostingerOrders, customers,
+  users, events, tickets, csvUploads, hostingerOrders, customers, eventDateNames,
   type User, type InsertUser,
   type Event, type InsertEvent,
   type Ticket, type InsertTicket,
   type CsvUpload, type InsertCsvUpload,
   type HostingerOrder, type InsertHostingerOrder,
   type Customer, type InsertCustomer,
+  type EventDateName, type InsertEventDateName,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -55,6 +56,10 @@ export interface IStorage {
   createOrUpdateCustomer(data: InsertCustomer): Promise<Customer>;
   getCustomerByEmail(email: string): Promise<Customer | undefined>;
   listCustomers(): Promise<Customer[]>;
+
+  listEventDateNames(): Promise<EventDateName[]>;
+  upsertEventDateName(data: InsertEventDateName): Promise<EventDateName>;
+  deleteEventDateName(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -264,6 +269,25 @@ export class DatabaseStorage implements IStorage {
 
   async listCustomers(): Promise<Customer[]> {
     return db.select().from(customers);
+  }
+
+  async listEventDateNames(): Promise<EventDateName[]> {
+    return db.select().from(eventDateNames).orderBy(eventDateNames.eventDate);
+  }
+
+  async upsertEventDateName(data: InsertEventDateName): Promise<EventDateName> {
+    const existing = await db.select().from(eventDateNames).where(eq(eventDateNames.eventDate, data.eventDate));
+    if (existing.length > 0) {
+      const [updated] = await db.update(eventDateNames).set({ eventName: data.eventName }).where(eq(eventDateNames.eventDate, data.eventDate)).returning();
+      return updated;
+    }
+    const [created] = await db.insert(eventDateNames).values(data).returning();
+    return created;
+  }
+
+  async deleteEventDateName(id: string): Promise<boolean> {
+    const deleted = await db.delete(eventDateNames).where(eq(eventDateNames.id, id)).returning();
+    return deleted.length > 0;
   }
 }
 

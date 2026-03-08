@@ -395,6 +395,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         productRaw: row.productRaw || null,
         parsedEventDate: row.parsedEventDate || null,
         parsedEventTime: row.parsedEventTime || null,
+        parsedEventType: row.parsedEventType || null,
         parsedTicketType: row.parsedTicketType || null,
         parsedClassName: row.parsedClassName || null,
         skus: row.skus || null,
@@ -833,6 +834,38 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (err) {
       console.error("Event comparison error:", err);
       res.status(500).json({ error: "Failed to generate event comparison" });
+    }
+  });
+
+  app.get("/api/admin/event-date-names", requireAdmin, async (_req, res) => {
+    try {
+      const names = await storage.listEventDateNames();
+      res.json(names);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch event date names" });
+    }
+  });
+
+  app.post("/api/admin/event-date-names", requireAdmin, async (req, res) => {
+    try {
+      const { eventDate, eventName } = req.body;
+      if (!eventDate || !eventName) {
+        return res.status(400).json({ error: "eventDate and eventName are required" });
+      }
+      const result = await storage.upsertEventDateName({ eventDate, eventName });
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to save event date name" });
+    }
+  });
+
+  app.delete("/api/admin/event-date-names/:id", requireAdmin, async (req, res) => {
+    try {
+      const deleted = await storage.deleteEventDateName(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "Not found" });
+      res.json({ message: "Deleted" });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to delete event date name" });
     }
   });
 }

@@ -2,12 +2,12 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   GitCompareArrows, AlertTriangle, CheckCircle2, XCircle,
-  Download, Filter, Edit2, Check, X, Loader2,
+  Download, Filter, Edit2, Check, X, Loader2, Calendar, Plus, Trash2,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import AppLayout from "@/components/AppLayout";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import type { EventDateName } from "@shared/schema";
 
 interface Divergence {
   id: string;
@@ -83,9 +84,19 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [filterDate, setFilterDate] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ billingName: "", email: "", price: "", parsedTicketType: "" });
+  const [newEventDate, setNewEventDate] = useState("");
+  const [newEventName, setNewEventName] = useState("");
 
   const { data, isLoading } = useQuery<ReconciliationData>({
     queryKey: ["/api/admin/reconciliation"],
+  });
+
+  const { data: eventDateNames } = useQuery<EventDateName[]>({
+    queryKey: ["/api/admin/event-date-names"],
+  });
+
+  const { data: csvOrders } = useQuery<any[]>({
+    queryKey: ["/api/admin/csv/orders"],
   });
 
   const applyMutation = useMutation({
@@ -111,6 +122,27 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       toast({ title: "Record updated" });
     },
     onError: () => toast({ title: "Failed to update record", variant: "destructive" }),
+  });
+
+  const saveEventNameMutation = useMutation({
+    mutationFn: (body: { eventDate: string; eventName: string }) =>
+      apiRequest("POST", "/api/admin/event-date-names", body),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
+      setNewEventDate("");
+      setNewEventName("");
+      toast({ title: "Event name saved" });
+    },
+    onError: () => toast({ title: "Failed to save event name", variant: "destructive" }),
+  });
+
+  const deleteEventNameMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/event-date-names/${id}`),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
+      toast({ title: "Event name removed" });
+    },
+    onError: () => toast({ title: "Failed to remove event name", variant: "destructive" }),
   });
 
   const divergences = data?.divergences || [];
@@ -248,6 +280,103 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                   data-testid="input-filter-date"
                 />
               </div>
+            </Card>
+
+            <Card data-testid="card-event-names">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-medium flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Event Names by Date
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 mb-4">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Event Date</label>
+                      <Input
+                        placeholder="e.g. Feb 15th"
+                        value={newEventDate}
+                        onChange={(e) => setNewEventDate(e.target.value)}
+                        className="w-[180px]"
+                        data-testid="input-event-date"
+                      />
+                    </div>
+                    <div className="space-y-1 flex-1 min-w-[200px]">
+                      <label className="text-xs text-muted-foreground">Event Name</label>
+                      <Input
+                        placeholder="e.g. Matcha On Ice Valentine's Day"
+                        value={newEventName}
+                        onChange={(e) => setNewEventName(e.target.value)}
+                        data-testid="input-event-name"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (newEventDate && newEventName.trim()) {
+                          saveEventNameMutation.mutate({ eventDate: newEventDate, eventName: newEventName.trim() });
+                        }
+                      }}
+                      disabled={!newEventDate || !newEventName.trim() || saveEventNameMutation.isPending}
+                      data-testid="button-save-event-name"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Save
+                    </Button>
+                  </div>
+                  {(() => {
+                    const allDates = new Set<string>();
+                    divergences.forEach(d => { if (d.eventDate) allDates.add(d.eventDate); });
+                    (csvOrders || []).forEach((o: any) => { if (o.parsedEventDate) allDates.add(o.parsedEventDate); });
+                    const namedDates = new Set((eventDateNames || []).map(edn => edn.eventDate));
+                    const unnamedDates = Array.from(allDates).filter(d => !namedDates.has(d)).sort();
+                    if (unnamedDates.length === 0) return null;
+                    return (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">Quick pick:</span>
+                        {unnamedDates.map(date => (
+                          <Button
+                            key={date}
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setNewEventDate(date)}
+                            data-testid={`button-pick-date-${date}`}
+                          >
+                            {date}
+                          </Button>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+                {eventDateNames && eventDateNames.length > 0 ? (
+                  <div className="space-y-2">
+                    {eventDateNames.map(edn => (
+                      <div key={edn.id} className="flex items-center justify-between gap-3 p-2 rounded-md bg-muted/50" data-testid={`event-name-row-${edn.id}`}>
+                        <div className="flex items-center gap-3">
+                          <Badge variant="outline" className="font-mono text-xs">{edn.eventDate}</Badge>
+                          <span className="text-sm font-medium" data-testid={`text-event-name-${edn.id}`}>{edn.eventName}</span>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => deleteEventNameMutation.mutate(edn.id)}
+                          disabled={deleteEventNameMutation.isPending}
+                          data-testid={`button-delete-event-name-${edn.id}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground" data-testid="text-no-event-names">
+                    No event names assigned yet. Select a date and type a name to get started.
+                  </p>
+                )}
+              </CardContent>
             </Card>
 
             {selectedIds.size > 0 && (

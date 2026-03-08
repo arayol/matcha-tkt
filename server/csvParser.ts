@@ -10,6 +10,7 @@ export interface ParsedCsvRow {
   productRaw: string;
   parsedEventDate: string;
   parsedEventTime: string;
+  parsedEventType: string;
   parsedTicketType: string;
   parsedClassName: string;
   skus: string;
@@ -44,11 +45,11 @@ export interface ParseResult {
 }
 
 const VENDOR_KEYWORDS = ["vendor", "expositor", "booth", "stand", "espaço", "espaco"];
-const TICKET_TYPES = ["members", "general admission", "general", "vip", "vendor", "expositor"];
 
 function parseProductField(product: string): {
   eventDate: string;
   eventTime: string;
+  eventType: string;
   ticketType: string;
   className: string;
   orderType: "ticket" | "vendor";
@@ -56,6 +57,7 @@ function parseProductField(product: string): {
   const result = {
     eventDate: "",
     eventTime: "",
+    eventType: "",
     ticketType: "",
     className: "",
     orderType: "ticket" as "ticket" | "vendor",
@@ -66,59 +68,85 @@ function parseProductField(product: string): {
   const isVendor = VENDOR_KEYWORDS.some(kw => product.toLowerCase().includes(kw));
   result.orderType = isVendor ? "vendor" : "ticket";
 
-  const datePatterns = [
-    /(\w+\s+\d{1,2}(?:st|nd|rd|th)?,?\s*\d{0,4})/i,
-    /(\d{1,2}\/\d{1,2}\/\d{2,4})/,
-    /(\d{4}-\d{2}-\d{2})/,
-  ];
-
-  for (const pattern of datePatterns) {
-    const match = product.match(pattern);
-    if (match) {
-      result.eventDate = match[1].trim();
-      break;
-    }
-  }
-
-  const timePatterns = [
-    /(\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm))/i,
-    /(\d{1,2}:\d{2})/,
-  ];
-
-  for (const pattern of timePatterns) {
-    const match = product.match(pattern);
-    if (match) {
-      result.eventTime = match[1].trim();
-      break;
-    }
-  }
-
-  const lowerProduct = product.toLowerCase();
-  for (const type of TICKET_TYPES) {
-    if (lowerProduct.includes(type)) {
-      result.ticketType = type.charAt(0).toUpperCase() + type.slice(1);
-      break;
-    }
-  }
-
-  if (!result.ticketType && isVendor) {
+  if (isVendor) {
     result.ticketType = "Vendor";
+    result.eventType = "Vendor";
+    const dateMatch = product.match(/(\w+\s+\d{1,2}(?:st|nd|rd|th)?)/i);
+    if (dateMatch) result.eventDate = dateMatch[1].trim();
+    return result;
   }
 
-  const parts = product.split(/[-–,]/);
-  if (parts.length > 0) {
-    let className = parts[0].trim();
-    className = className
-      .replace(/(\w+\s+\d{1,2}(?:st|nd|rd|th)?,?\s*\d{0,4})/i, "")
-      .replace(/(\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm))/i, "")
-      .trim();
-    if (className && className.length > 2) {
-      result.className = className;
+  const commaIdx = product.indexOf(",");
+  if (commaIdx === -1) {
+    result.className = product;
+    return result;
+  }
+
+  result.eventDate = product.substring(0, commaIdx).trim();
+
+  const afterComma = product.substring(commaIdx + 1).trim();
+
+  const membersMatch = afterComma.match(/^(.+?)\s*[-–]\s*Members Event Ticket$/i);
+  if (membersMatch) {
+    result.eventTime = membersMatch[1].trim();
+    result.eventType = "Members Event";
+    result.ticketType = "Members Event Ticket";
+    return result;
+  }
+
+  const membersSimple = afterComma.match(/^(.+?)\s+Members Event Ticket$/i);
+  if (membersSimple) {
+    result.eventTime = membersSimple[1].trim();
+    result.eventType = "Members Event";
+    result.ticketType = "Members Event Ticket";
+    return result;
+  }
+
+  const etMatch = afterComma.match(/^(.+?)\s+Event Ticket\s*[-–]\s*(.+)$/i);
+  if (etMatch) {
+    result.eventTime = etMatch[1].trim();
+    result.eventType = "Event Ticket";
+    const afterET = etMatch[2].trim();
+
+    if (/general\s+admission/i.test(afterET)) {
+      result.ticketType = "General Admission Ticket";
+    } else if (/class/i.test(afterET)) {
+      result.ticketType = "Class Ticket";
+      result.className = afterET;
+    } else {
+      result.ticketType = afterET;
     }
+    return result;
   }
 
-  if (!result.className) {
-    result.className = product.split(/[-–]/)[0]?.trim() || product;
+  const etSimple = afterComma.match(/^(.+?)\s+Event Ticket$/i);
+  if (etSimple) {
+    result.eventTime = etSimple[1].trim();
+    result.eventType = "Event Ticket";
+    result.ticketType = "General Admission Ticket";
+    return result;
+  }
+
+  const timeMatch = afterComma.match(/^(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?(?:\s*[-–]\s*\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)?)/i);
+  if (timeMatch) {
+    result.eventTime = timeMatch[1].trim();
+    result.eventType = "Event Ticket";
+    const remaining = afterComma.substring(timeMatch[0].length).replace(/^\s*[-–]\s*/, "").trim();
+    if (remaining) {
+      if (/general\s+admission/i.test(remaining)) {
+        result.ticketType = "General Admission Ticket";
+      } else if (/class/i.test(remaining)) {
+        result.ticketType = "Class Ticket";
+        result.className = remaining;
+      } else if (/members?\s+event/i.test(remaining)) {
+        result.eventType = "Members Event";
+        result.ticketType = "Members Event Ticket";
+      } else {
+        result.ticketType = remaining;
+      }
+    } else {
+      result.ticketType = "General Admission Ticket";
+    }
   }
 
   return result;
@@ -260,6 +288,7 @@ export function parseCsvContent(csvContent: string): ParseResult {
       productRaw,
       parsedEventDate: parsed.eventDate,
       parsedEventTime: parsed.eventTime,
+      parsedEventType: parsed.eventType,
       parsedTicketType: parsed.ticketType,
       parsedClassName: parsed.className,
       skus: String(normalized.skus || "").trim(),
