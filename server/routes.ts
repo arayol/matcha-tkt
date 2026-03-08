@@ -680,6 +680,105 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  app.post("/api/admin/reconciliation/generate-tickets", requireAdmin, async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "ids[] required" });
+      }
+
+      const allOrders = await storage.listHostingerOrders();
+      const orders = allOrders.filter(o =>
+        ids.includes(o.id) &&
+        o.reconciliationStatus !== "reconciled" &&
+        o.reconciliationStatus !== "deleted" &&
+        o.orderType !== "vendor"
+      );
+      if (orders.length === 0) {
+        return res.status(404).json({ error: "No eligible orders found (already reconciled, deleted, or vendor orders are excluded)" });
+      }
+
+      const eventList = await storage.listEvents();
+      const eventDateNames = await storage.listEventDateNames();
+      const issuer = req.user as any;
+      const results: { orderNumber: string; name: string; email: string; status: string; error?: string }[] = [];
+
+      for (const order of orders) {
+        try {
+          if (!order.email) {
+            results.push({ orderNumber: order.orderNumber, name: order.billingName || "", email: "", status: "skipped", error: "No email address" });
+            continue;
+          }
+
+          let matchedEvent = eventList.find(e =>
+            (order.parsedEventDate && e.date && order.parsedEventDate === e.date) ||
+            (order.parsedClassName && e.name && (
+              e.name.toLowerCase().includes(order.parsedClassName.toLowerCase()) ||
+              order.parsedClassName.toLowerCase().includes(e.name.toLowerCase())
+            ))
+          );
+
+          if (!matchedEvent && order.parsedEventDate) {
+            const eventDateName = eventDateNames.find(edn => edn.eventDate === order.parsedEventDate);
+            const eventName = eventDateName?.eventName || `Event - ${order.parsedEventDate}`;
+            const created = await storage.createEvent({
+              name: eventName,
+              date: order.parsedEventDate,
+              time: order.parsedEventTime || "TBD",
+              eventType: order.parsedEventType || "Event Ticket",
+              location: "San Diego, CA",
+              active: true,
+            });
+            matchedEvent = created;
+            eventList.push(created);
+          }
+
+          if (!matchedEvent) {
+            results.push({ orderNumber: order.orderNumber, name: order.billingName || "", email: order.email, status: "skipped", error: "Could not match to an event" });
+            continue;
+          }
+
+          const ticketId = crypto.randomUUID();
+          const { qrData, qrCode, ticketUrl } = await generateTicketQR(ticketId);
+          const ticketType = order.parsedTicketType || "General Admission";
+
+          const ticket = await storage.createTicket({
+            eventId: matchedEvent.id,
+            purchaserName: order.billingName || "Guest",
+            purchaserEmail: order.email,
+            ticketType,
+            stripeSessionId: null,
+            stripePaymentIntentId: null,
+            qrCode,
+            qrData,
+            ticketUrl,
+            status: "valid",
+            issuedBy: issuer?.username || "reconciliation",
+          });
+
+          await storage.updateHostingerOrder(order.id, { reconciliationStatus: "reconciled" });
+
+          sendTicketEmail({ ticket, event: matchedEvent, isCourtesy: false }).catch(err =>
+            console.error(`⚠️ Email failed for order ${order.orderNumber}:`, err)
+          );
+
+          results.push({ orderNumber: order.orderNumber, name: order.billingName || "", email: order.email, status: "sent" });
+        } catch (err: any) {
+          results.push({ orderNumber: order.orderNumber, name: order.billingName || "", email: order.email || "", status: "error", error: err.message });
+        }
+      }
+
+      const sent = results.filter(r => r.status === "sent").length;
+      const skipped = results.filter(r => r.status === "skipped").length;
+      const errors = results.filter(r => r.status === "error").length;
+
+      res.json({ message: `${sent} tickets sent, ${skipped} skipped, ${errors} errors`, results, sent, skipped, errors });
+    } catch (err) {
+      console.error("Generate tickets error:", err);
+      res.status(500).json({ error: "Failed to generate tickets" });
+    }
+  });
+
   app.patch("/api/admin/reconciliation/:id", requireAdmin, async (req, res) => {
     try {
       const { billingName, email, price, parsedTicketType } = req.body;
@@ -773,13 +872,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
       const comparison = eventList.map(event => {
         const eventTickets = ticketList.filter(t => t.eventId === event.id);
-        const csvOrders = hostingerOrdersList.filter(o =>
-          o.parsedClassName && event.name && (
-            event.name.toLowerCase().includes(o.parsedClassName.toLowerCase()) ||
-            o.parsedClassName.toLowerCase().includes(event.name.toLowerCase()) ||
-            o.parsedEventDate === event.date
-          )
-        );
+        const csvOrders = hostingerOrdersList.filter(o => {
+          if (o.parsedEventDate && event.date && o.parsedEventDate === event.date) return true;
+          if (o.parsedClassName && event.name) {
+            const cn = o.parsedClassName.toLowerCase();
+            const en = event.name.toLowerCase();
+            if (en.includes(cn) || cn.includes(en)) return true;
+          }
+          return false;
+        });
 
         const memberTickets = eventTickets.filter(t => t.ticketType.toLowerCase().includes("member"));
         const generalTickets = eventTickets.filter(t =>

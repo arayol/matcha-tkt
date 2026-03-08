@@ -109,6 +109,7 @@ Ticket management system for fitness events in San Diego, CA. Includes Stripe in
 - `GET /api/admin/event-date-names` — List event date name mappings
 - `POST /api/admin/event-date-names` — Create/update event date name {eventDate, eventName}
 - `DELETE /api/admin/event-date-names/:id` — Delete event date name mapping
+- `POST /api/admin/reconciliation/generate-tickets` — Generate tickets + send emails for CSV-only orders {ids[]}, auto-creates events if needed
 
 ## Auth Roles
 - `adm` — Full access: dashboard, tickets, courtesy, scanner, user management, CSV import, reconciliation, event comparison

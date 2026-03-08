@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   GitCompareArrows, AlertTriangle, CheckCircle2, XCircle,
-  Download, Filter, Edit2, Check, X, Loader2, Calendar, Plus, Trash2,
+  Download, Filter, Edit2, Check, X, Loader2, Calendar, Plus, Trash2, Send, MailCheck,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,9 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
 import type { EventDateName } from "@shared/schema";
 
 interface Divergence {
@@ -86,6 +89,8 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [editForm, setEditForm] = useState({ billingName: "", email: "", price: "", parsedTicketType: "" });
   const [newEventDate, setNewEventDate] = useState("");
   const [newEventName, setNewEventName] = useState("");
+  const [showTicketDialog, setShowTicketDialog] = useState(false);
+  const [ticketDialogIds, setTicketDialogIds] = useState<string[]>([]);
 
   const { data, isLoading } = useQuery<ReconciliationData>({
     queryKey: ["/api/admin/reconciliation"],
@@ -143,6 +148,26 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       toast({ title: "Event name removed" });
     },
     onError: () => toast({ title: "Failed to remove event name", variant: "destructive" }),
+  });
+
+  const generateTicketsMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      apiRequest("POST", "/api/admin/reconciliation/generate-tickets", { ids }).then(r => r.json()),
+    onSuccess: async (result: { sent: number; skipped: number; errors: number; results: any[] }) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/reconciliation"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/events/comparison"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/csv/orders"] });
+      setSelectedIds(new Set());
+      setShowTicketDialog(false);
+      setTicketDialogIds([]);
+      toast({
+        title: "Tickets generated",
+        description: `${result.sent} sent, ${result.skipped} skipped${result.errors > 0 ? `, ${result.errors} errors` : ""}`,
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to generate tickets", variant: "destructive" });
+    },
   });
 
   const divergences = data?.divergences || [];
@@ -376,7 +401,17 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => applyMutation.mutate({ action: "reconcile", ids: Array.from(selectedIds) })}
+                  onClick={() => {
+                    const ids = Array.from(selectedIds);
+                    const selected = divergences.filter(d => ids.includes(d.id));
+                    const csvOnly = selected.filter(d => d.type === "missing_in_stripe" && d.source === "csv");
+                    if (csvOnly.length > 0) {
+                      setTicketDialogIds(ids);
+                      setShowTicketDialog(true);
+                    } else {
+                      applyMutation.mutate({ action: "reconcile", ids });
+                    }
+                  }}
                   disabled={applyMutation.isPending}
                   data-testid="button-bulk-reconcile"
                 >
@@ -552,6 +587,85 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
           </>
         )}
       </div>
+
+      <Dialog open={showTicketDialog} onOpenChange={(open) => { if (!open) { setShowTicketDialog(false); setTicketDialogIds([]); } }}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto" data-testid="dialog-ticket-confirm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MailCheck className="h-5 w-5" />
+              Send Tickets & Reconcile
+            </DialogTitle>
+            <DialogDescription>
+              Some selected orders are missing in Stripe. Would you like to generate tickets and send email invitations to these customers?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 my-4">
+            <p className="text-sm font-medium text-muted-foreground">Customers who will receive tickets:</p>
+            <div className="rounded-lg border divide-y max-h-[300px] overflow-y-auto">
+              {(() => {
+                const csvOnlyItems = divergences.filter(d =>
+                  ticketDialogIds.includes(d.id) && d.type === "missing_in_stripe" && d.source === "csv"
+                );
+                if (csvOnlyItems.length === 0) return (
+                  <p className="p-3 text-sm text-muted-foreground">No CSV-only orders in selection</p>
+                );
+                return csvOnlyItems.map(d => (
+                  <div key={d.id} className="flex items-center justify-between gap-3 px-3 py-2" data-testid={`ticket-preview-${d.id}`}>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate" data-testid={`ticket-name-${d.id}`}>{d.billingName || "Guest"}</p>
+                      <p className="text-xs text-muted-foreground truncate" data-testid={`ticket-email-${d.id}`}>{d.email || "No email"}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <Badge variant="outline" className="text-xs">{d.eventDate || "—"}</Badge>
+                      <p className="text-xs text-muted-foreground mt-0.5">{d.csvTicketType || "General"}</p>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                applyMutation.mutate({ action: "reconcile", ids: ticketDialogIds });
+                setShowTicketDialog(false);
+                setTicketDialogIds([]);
+              }}
+              disabled={applyMutation.isPending || generateTicketsMutation.isPending}
+              data-testid="button-reconcile-only"
+            >
+              <CheckCircle2 className="h-4 w-4 mr-1" />
+              Reconcile Only
+            </Button>
+            <Button
+              onClick={() => {
+                const csvOnlyIds = divergences
+                  .filter(d => ticketDialogIds.includes(d.id) && d.type === "missing_in_stripe" && d.source === "csv")
+                  .map(d => d.id);
+                const otherIds = ticketDialogIds.filter(id => !csvOnlyIds.includes(id));
+                if (otherIds.length > 0) {
+                  applyMutation.mutate({ action: "reconcile", ids: otherIds });
+                }
+                if (csvOnlyIds.length > 0) {
+                  generateTicketsMutation.mutate(csvOnlyIds);
+                }
+              }}
+              disabled={generateTicketsMutation.isPending}
+              data-testid="button-send-tickets"
+            >
+              {generateTicketsMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4 mr-1" />
+              )}
+              Send Tickets & Reconcile
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
