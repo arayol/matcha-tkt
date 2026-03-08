@@ -405,6 +405,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         shipping: row.shipping || null,
         taxes: row.taxes || null,
         discountCode: row.discountCode || null,
+        discountAmount: row.discountAmount || null,
         giftCard: row.giftCard || null,
         streetAddress: row.streetAddress || null,
         city: row.city || null,
@@ -487,24 +488,35 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.get("/api/admin/reconciliation", requireAdmin, async (_req, res) => {
     try {
-      const hostingerOrdersList = await storage.listHostingerOrders();
+      const allHostingerOrders = await storage.listHostingerOrders();
       const ticketList = await storage.listTickets();
       const eventList = await storage.listEvents();
 
       const eventMap = new Map(eventList.map(e => [e.id, e]));
 
+      const activeHostingerOrders = allHostingerOrders.filter(
+        o => o.reconciliationStatus === "pending" || !o.reconciliationStatus
+      );
+      const reconciledCount = allHostingerOrders.filter(
+        o => o.reconciliationStatus === "reconciled" || o.reconciliationStatus === "deleted"
+      ).length;
+
+      const activeTickets = ticketList.filter(
+        t => !t.reconciliationStatus || t.reconciliationStatus === "pending"
+      );
+
       const ticketsByEmail = new Map<string, typeof ticketList>();
-      for (const ticket of ticketList) {
+      for (const ticket of activeTickets) {
         const key = ticket.purchaserEmail.toLowerCase();
         if (!ticketsByEmail.has(key)) ticketsByEmail.set(key, []);
         ticketsByEmail.get(key)!.push(ticket);
       }
 
-      const csvEmails = new Set(hostingerOrdersList.map(o => (o.email || "").toLowerCase()).filter(Boolean));
+      const csvEmails = new Set(activeHostingerOrders.map(o => (o.email || "").toLowerCase()).filter(Boolean));
 
       const divergences: any[] = [];
 
-      for (const order of hostingerOrdersList) {
+      for (const order of activeHostingerOrders) {
         const emailKey = (order.email || "").toLowerCase();
         const matchingTickets = ticketsByEmail.get(emailKey) || [];
 
@@ -516,9 +528,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
             orderNumber: order.orderNumber,
             email: order.email,
             billingName: order.billingName,
-            csvPrice: order.price,
+            csvPrice: order.subtotal || order.price,
             csvProduct: order.productRaw,
             csvTicketType: order.parsedTicketType,
+            csvPhone: order.phone,
+            csvDiscountCode: order.discountCode,
             orderType: order.orderType,
             eventDate: order.parsedEventDate,
             stripeData: null,
@@ -536,8 +550,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
               diffs.push("name");
             }
 
-            if (order.price && event?.priceInCents) {
-              const csvPriceCents = Math.round(parseFloat(order.price.replace(/[^0-9.]/g, "")) * 100);
+            const priceStr = order.subtotal || order.price;
+            if (priceStr && event?.priceInCents) {
+              const csvPriceCents = Math.round(parseFloat(priceStr.replace(/[^0-9.]/g, "")) * 100);
               if (csvPriceCents !== event.priceInCents) {
                 diffs.push("price");
               }
@@ -566,9 +581,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
               orderNumber: order.orderNumber,
               email: order.email,
               billingName: order.billingName,
-              csvPrice: order.price,
+              csvPrice: order.subtotal || order.price,
               csvProduct: order.productRaw,
               csvTicketType: order.parsedTicketType,
+              csvPhone: order.phone,
+              csvDiscountCode: order.discountCode,
               orderType: order.orderType,
               eventDate: order.parsedEventDate,
               stripeData: {
@@ -585,7 +602,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         }
       }
 
-      for (const ticket of ticketList) {
+      for (const ticket of activeTickets) {
         if (!ticket.stripeSessionId) continue;
         const emailKey = ticket.purchaserEmail.toLowerCase();
         if (!csvEmails.has(emailKey)) {
@@ -600,6 +617,8 @@ export async function registerRoutes(httpServer: Server, app: Express) {
             csvPrice: null,
             csvProduct: null,
             csvTicketType: null,
+            csvPhone: null,
+            csvDiscountCode: null,
             orderType: "ticket",
             eventDate: event?.date,
             stripeData: {
@@ -615,13 +634,13 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       }
 
       const summary = {
-        totalCsvRecords: hostingerOrdersList.length,
+        totalCsvRecords: allHostingerOrders.length,
         totalStripeTickets: ticketList.filter(t => t.stripeSessionId).length,
         totalDivergences: divergences.length,
         missingInStripe: divergences.filter(d => d.type === "missing_in_stripe").length,
         missingInCsv: divergences.filter(d => d.type === "missing_in_csv").length,
         dataMismatches: divergences.filter(d => d.type === "data_mismatch").length,
-        reconciled: hostingerOrdersList.length - divergences.filter(d => d.source === "csv" || d.source === "both").length,
+        reconciled: reconciledCount,
       };
 
       res.json({ divergences, summary });
@@ -638,16 +657,19 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         return res.status(400).json({ error: "action and ids[] required" });
       }
 
+      const status = action === "delete" ? "deleted" : action === "reconcile" ? "reconciled" : null;
+      if (!status) {
+        return res.status(400).json({ error: "Invalid action. Use 'delete' or 'reconcile'." });
+      }
+
       let processed = 0;
-      if (action === "delete") {
-        for (const id of ids) {
-          const updated = await storage.updateHostingerOrder(id, { reconciliationStatus: "deleted" });
-          if (updated) processed++;
-        }
-      } else if (action === "reconcile") {
-        for (const id of ids) {
-          const updated = await storage.updateHostingerOrder(id, { reconciliationStatus: "reconciled" });
-          if (updated) processed++;
+      for (const id of ids) {
+        const hostingerResult = await storage.updateHostingerOrder(id, { reconciliationStatus: status });
+        if (hostingerResult) {
+          processed++;
+        } else {
+          const ticketResult = await storage.updateTicketReconciliationStatus(id, status);
+          if (ticketResult) processed++;
         }
       }
 
@@ -676,45 +698,53 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.get("/api/admin/reconciliation/export", requireAdmin, async (_req, res) => {
     try {
-      const hostingerOrdersList = await storage.listHostingerOrders();
+      const allHostingerOrders = await storage.listHostingerOrders();
       const ticketList = await storage.listTickets();
       const eventList = await storage.listEvents();
       const eventMap = new Map(eventList.map(e => [e.id, e]));
 
+      const activeOrders = allHostingerOrders.filter(
+        o => o.reconciliationStatus === "pending" || !o.reconciliationStatus
+      );
+      const activeTickets = ticketList.filter(
+        t => !t.reconciliationStatus || t.reconciliationStatus === "pending"
+      );
+
       const ticketsByEmail = new Map<string, typeof ticketList>();
-      for (const ticket of ticketList) {
+      for (const ticket of activeTickets) {
         const key = ticket.purchaserEmail.toLowerCase();
         if (!ticketsByEmail.has(key)) ticketsByEmail.set(key, []);
         ticketsByEmail.get(key)!.push(ticket);
       }
 
-      const csvEmails = new Set(hostingerOrdersList.map(o => (o.email || "").toLowerCase()).filter(Boolean));
+      const csvEmails = new Set(activeOrders.map(o => (o.email || "").toLowerCase()).filter(Boolean));
 
       let csv = "Type,Source,Order Number,Email,CSV Name,Stripe Name,CSV Price,Stripe Price,Product,Event Date,Differences\n";
 
-      for (const order of hostingerOrdersList) {
+      for (const order of activeOrders) {
         const emailKey = (order.email || "").toLowerCase();
         const matchingTickets = ticketsByEmail.get(emailKey) || [];
+        const priceStr = order.subtotal || order.price;
 
         if (matchingTickets.length === 0) {
-          csv += `Missing in Stripe,CSV,${order.orderNumber},${order.email},${order.billingName},,${order.price},,${order.productRaw},${order.parsedEventDate},\n`;
+          csv += `Missing in Stripe,CSV,${order.orderNumber},${order.email},${order.billingName},,${priceStr},,${order.productRaw},${order.parsedEventDate},\n`;
         } else {
           for (const ticket of matchingTickets) {
             const event = eventMap.get(ticket.eventId);
             const diffs: string[] = [];
             if (order.billingName && ticket.purchaserName && order.billingName.toLowerCase() !== ticket.purchaserName.toLowerCase()) diffs.push("name");
-            if (order.price && event?.priceInCents) {
-              const csvPriceCents = Math.round(parseFloat(order.price.replace(/[^0-9.]/g, "")) * 100);
+            if (priceStr && event?.priceInCents) {
+              const csvPriceCents = Math.round(parseFloat(priceStr.replace(/[^0-9.]/g, "")) * 100);
               if (csvPriceCents !== event.priceInCents) diffs.push("price");
             }
             if (diffs.length > 0) {
-              csv += `Data Mismatch,Both,${order.orderNumber},${order.email},${order.billingName},${ticket.purchaserName},${order.price},${event?.priceInCents ? (event.priceInCents / 100).toFixed(2) : ""},${order.productRaw},${order.parsedEventDate},${diffs.join(";")}\n`;
+              csv += `Data Mismatch,Both,${order.orderNumber},${order.email},${order.billingName},${ticket.purchaserName},${priceStr},${event?.priceInCents ? (event.priceInCents / 100).toFixed(2) : ""},${order.productRaw},${order.parsedEventDate},${diffs.join(";")}\n`;
             }
           }
         }
       }
 
-      for (const ticket of ticketList) {
+      for (const ticket of activeTickets) {
         if (!ticket.stripeSessionId) continue;
         const emailKey = ticket.purchaserEmail.toLowerCase();
         if (!csvEmails.has(emailKey)) {
@@ -735,7 +765,10 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     try {
       const eventList = await storage.listEvents();
       const ticketList = await storage.listTickets();
-      const hostingerOrdersList = await storage.listHostingerOrders();
+      const allHostingerOrders = await storage.listHostingerOrders();
+      const hostingerOrdersList = allHostingerOrders.filter(
+        o => o.reconciliationStatus !== "deleted"
+      );
 
       const comparison = eventList.map(event => {
         const eventTickets = ticketList.filter(t => t.eventId === event.id);

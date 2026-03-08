@@ -64,9 +64,9 @@ Ticket management system for fitness events in San Diego, CA. Includes Stripe in
 ## Database Tables
 - `users` — id, username, password, role
 - `events` — id, name, date, time, event_type, location, capacity, price_in_cents, stripe_product_id, active
-- `tickets` — id, event_id, purchaser_name, purchaser_email, ticket_type, stripe_session_id, stripe_payment_intent_id, qr_code, qr_data, ticket_url, status, issued_by, purchased_at, used_at
+- `tickets` — id, event_id, purchaser_name, purchaser_email, ticket_type, stripe_session_id, stripe_payment_intent_id, qr_code, qr_data, ticket_url, status, issued_by, reconciliation_status, purchased_at, used_at
 - `csv_uploads` — id, file_name, uploaded_at, uploaded_by, record_count, status (active/reverted)
-- `hostinger_orders` — id, import_id, order_number, email, billing_name, phone, order_status, created_at, product_raw, parsed_event_date, parsed_event_time, parsed_ticket_type, parsed_class_name, skus, price, quantity, currency, subtotal, shipping, taxes, discount_code, gift_card, street_address, city, state, postal, payment_method, notes, order_type (ticket/vendor), reconciliation_status
+- `hostinger_orders` — id, import_id, order_number, email, billing_name, phone, order_status, created_at, product_raw, parsed_event_date, parsed_event_time, parsed_ticket_type, parsed_class_name, skus, price, quantity, currency, subtotal, shipping, taxes, discount_code, discount_amount, gift_card, street_address, city, state, postal, payment_method, notes, order_type (ticket/vendor), reconciliation_status
 - `customers` — id, name, email, phone, street_address, city, state, postal, events_attended[], ticket_types[], created_at, updated_at
 
 ## API Endpoints

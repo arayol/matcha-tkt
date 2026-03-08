@@ -49,11 +49,12 @@ export const tickets = pgTable("tickets", {
   ticketUrl: text("ticket_url").unique(),
   status: text("status").notNull().default("valid"),
   issuedBy: text("issued_by"),
+  reconciliationStatus: text("reconciliation_status"),
   purchasedAt: timestamp("purchased_at").defaultNow(),
   usedAt: timestamp("used_at"),
 });
 
-export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true, purchasedAt: true, usedAt: true });
+export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true, purchasedAt: true, usedAt: true, reconciliationStatus: true });
 export type InsertTicket = z.infer<typeof insertTicketSchema>;
 export type Ticket = typeof tickets.$inferSelect;
 
@@ -92,6 +93,7 @@ export const hostingerOrders = pgTable("hostinger_orders", {
   shipping: text("shipping"),
   taxes: text("taxes"),
   discountCode: text("discount_code"),
+  discountAmount: text("discount_amount"),
   giftCard: text("gift_card"),
   streetAddress: text("street_address"),
   city: text("city"),

@@ -40,8 +40,11 @@ interface ParsedPreviewRow {
   orderNumber: string;
   email: string;
   billingName: string;
+  phone: string;
   product: string;
   price: string;
+  subtotal: string;
+  discountCode: string;
   quantity: string;
   status: string;
 }
@@ -120,8 +123,11 @@ export default function CsvImportPage({ dark, toggleTheme, onLogout, user }: Csv
     const orderCol = findCol(["Order Number", "Order"]);
     const emailCol = findCol(["Email"]);
     const nameCol = findCol(["Billing Name", "Name"]);
+    const phoneCol = findCol(["Billing Phone", "Phone"]);
     const productCol = findCol(["Product"]);
     const priceCol = findCol(["Price"]);
+    const subtotalCol = findCol(["Subtotal", "Total", "Amount"]);
+    const discountCol = findCol(["Discount Code", "Discount", "Coupon"]);
     const qtyCol = findCol(["Quantity", "Qty"]);
     const statusCol = findCol(["Status"]);
 
@@ -134,8 +140,11 @@ export default function CsvImportPage({ dark, toggleTheme, onLogout, user }: Csv
         orderNumber: orderCol >= 0 ? cols[orderCol] || "" : "",
         email: emailCol >= 0 ? cols[emailCol] || "" : "",
         billingName: nameCol >= 0 ? cols[nameCol] || "" : "",
+        phone: phoneCol >= 0 ? cols[phoneCol] || "" : "",
         product: productCol >= 0 ? cols[productCol] || "" : "",
         price: priceCol >= 0 ? cols[priceCol] || "" : "",
+        subtotal: subtotalCol >= 0 ? cols[subtotalCol] || "" : "",
+        discountCode: discountCol >= 0 ? cols[discountCol] || "" : "",
         quantity: qtyCol >= 0 ? cols[qtyCol] || "" : "",
         status: statusCol >= 0 ? cols[statusCol] || "" : "",
       });
@@ -336,8 +345,11 @@ export default function CsvImportPage({ dark, toggleTheme, onLogout, user }: Csv
                         <TableHead>Order #</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Name</TableHead>
+                        <TableHead>Phone</TableHead>
                         <TableHead>Product</TableHead>
                         <TableHead>Price</TableHead>
+                        <TableHead>Subtotal</TableHead>
+                        <TableHead>Discount</TableHead>
                         <TableHead>Qty</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
@@ -348,8 +360,11 @@ export default function CsvImportPage({ dark, toggleTheme, onLogout, user }: Csv
                           <TableCell className="font-mono text-xs">{row.orderNumber}</TableCell>
                           <TableCell className="text-xs">{row.email}</TableCell>
                           <TableCell className="text-xs">{row.billingName}</TableCell>
+                          <TableCell className="text-xs">{row.phone || "-"}</TableCell>
                           <TableCell className="text-xs max-w-[200px] truncate">{row.product}</TableCell>
                           <TableCell className="text-xs">{row.price}</TableCell>
+                          <TableCell className="text-xs">{row.subtotal || "-"}</TableCell>
+                          <TableCell className="text-xs">{row.discountCode || "-"}</TableCell>
                           <TableCell className="text-xs">{row.quantity}</TableCell>
                           <TableCell>
                             <Badge variant="outline" className="text-xs">

@@ -94,6 +94,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
     onSuccess: async (res) => {
       const result = await res.json();
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/reconciliation"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/events/comparison"] });
       setSelectedIds(new Set());
       toast({ title: `${result.processed} records processed` });
     },
@@ -105,6 +106,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       apiRequest("PATCH", `/api/admin/reconciliation/${id}`, data),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/reconciliation"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/events/comparison"] });
       setEditingId(null);
       toast({ title: "Record updated" });
     },

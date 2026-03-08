@@ -49,6 +49,7 @@ export interface IStorage {
   listHostingerOrdersByImportId(importId: string): Promise<HostingerOrder[]>;
   deleteHostingerOrdersByImportId(importId: string): Promise<number>;
   updateHostingerOrder(id: string, data: Partial<HostingerOrder>): Promise<HostingerOrder | undefined>;
+  updateTicketReconciliationStatus(id: string, status: string): Promise<Ticket | undefined>;
   getAllOrderNumbers(): Promise<Set<string>>;
 
   createOrUpdateCustomer(data: InsertCustomer): Promise<Customer>;
@@ -214,6 +215,11 @@ export class DatabaseStorage implements IStorage {
 
   async updateHostingerOrder(id: string, data: Partial<HostingerOrder>): Promise<HostingerOrder | undefined> {
     const [updated] = await db.update(hostingerOrders).set(data).where(eq(hostingerOrders.id, id)).returning();
+    return updated;
+  }
+
+  async updateTicketReconciliationStatus(id: string, status: string): Promise<Ticket | undefined> {
+    const [updated] = await db.update(tickets).set({ reconciliationStatus: status }).where(eq(tickets.id, id)).returning();
     return updated;
   }
 
