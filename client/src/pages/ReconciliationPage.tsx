@@ -290,66 +290,55 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3 mb-4">
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Event Date</label>
-                      <Input
-                        placeholder="e.g. Feb 15th"
-                        value={newEventDate}
-                        onChange={(e) => setNewEventDate(e.target.value)}
-                        className="w-[180px]"
-                        data-testid="input-event-date"
-                      />
-                    </div>
-                    <div className="space-y-1 flex-1 min-w-[200px]">
-                      <label className="text-xs text-muted-foreground">Event Name</label>
-                      <Input
-                        placeholder="e.g. Matcha On Ice Valentine's Day"
-                        value={newEventName}
-                        onChange={(e) => setNewEventName(e.target.value)}
-                        data-testid="input-event-name"
-                      />
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        if (newEventDate && newEventName.trim()) {
-                          saveEventNameMutation.mutate({ eventDate: newEventDate, eventName: newEventName.trim() });
-                        }
-                      }}
-                      disabled={!newEventDate || !newEventName.trim() || saveEventNameMutation.isPending}
-                      data-testid="button-save-event-name"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Save
-                    </Button>
+                <div className="flex flex-wrap items-end gap-3 mb-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Event Date</label>
+                    <Select value={newEventDate} onValueChange={setNewEventDate}>
+                      <SelectTrigger className="w-[200px]" data-testid="select-event-date">
+                        <SelectValue placeholder="Select date..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(() => {
+                          const MONTH_ORDER: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+                          const parseDateSort = (d: string) => {
+                            const m = d.match(/^(\w+)\s+(\d+)/i);
+                            if (!m) return 0;
+                            const month = MONTH_ORDER[m[1].toLowerCase().slice(0, 3)] ?? 0;
+                            const day = parseInt(m[2], 10) || 0;
+                            return month * 100 + day;
+                          };
+                          const allDates = new Set<string>();
+                          (csvOrders || []).forEach((o: any) => { if (o.parsedEventDate) allDates.add(o.parsedEventDate); });
+                          divergences.forEach(d => { if (d.eventDate) allDates.add(d.eventDate); });
+                          return Array.from(allDates).sort((a, b) => parseDateSort(b) - parseDateSort(a)).map(date => (
+                            <SelectItem key={date} value={date}>{date}</SelectItem>
+                          ));
+                        })()}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  {(() => {
-                    const allDates = new Set<string>();
-                    divergences.forEach(d => { if (d.eventDate) allDates.add(d.eventDate); });
-                    (csvOrders || []).forEach((o: any) => { if (o.parsedEventDate) allDates.add(o.parsedEventDate); });
-                    const namedDates = new Set((eventDateNames || []).map(edn => edn.eventDate));
-                    const unnamedDates = Array.from(allDates).filter(d => !namedDates.has(d)).sort();
-                    if (unnamedDates.length === 0) return null;
-                    return (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-xs text-muted-foreground">Quick pick:</span>
-                        {unnamedDates.map(date => (
-                          <Button
-                            key={date}
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => setNewEventDate(date)}
-                            data-testid={`button-pick-date-${date}`}
-                          >
-                            {date}
-                          </Button>
-                        ))}
-                      </div>
-                    );
-                  })()}
+                  <div className="space-y-1 flex-1 min-w-[200px]">
+                    <label className="text-xs text-muted-foreground">Event Name</label>
+                    <Input
+                      placeholder="e.g. Matcha On Ice Valentine's Day"
+                      value={newEventName}
+                      onChange={(e) => setNewEventName(e.target.value)}
+                      data-testid="input-event-name"
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (newEventDate && newEventName.trim()) {
+                        saveEventNameMutation.mutate({ eventDate: newEventDate, eventName: newEventName.trim() });
+                      }
+                    }}
+                    disabled={!newEventDate || !newEventName.trim() || saveEventNameMutation.isPending}
+                    data-testid="button-save-event-name"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Save
+                  </Button>
                 </div>
                 {eventDateNames && eventDateNames.length > 0 ? (
                   <div className="space-y-2">
