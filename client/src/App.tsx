@@ -10,6 +10,9 @@ import TicketPage from "@/pages/TicketPage";
 import TicketsPage from "@/pages/TicketsPage";
 import CourtesyPage from "@/pages/CourtesyPage";
 import AdminUsersPage from "@/pages/AdminUsersPage";
+import CsvImportPage from "@/pages/CsvImportPage";
+import ReconciliationPage from "@/pages/ReconciliationPage";
+import EventComparisonPage from "@/pages/EventComparisonPage";
 import NotFound from "@/pages/not-found";
 import { Toaster } from "@/components/ui/toaster";
 
@@ -88,6 +91,27 @@ function AppContent() {
             </Route>
             <Route path="/courtesy">
               <CourtesyPage {...shared} />
+            </Route>
+            <Route path="/admin/csv">
+              {isAdmin ? (
+                <CsvImportPage {...shared} />
+              ) : (
+                () => { navigate("/scan"); return null; }
+              )}
+            </Route>
+            <Route path="/admin/reconciliation">
+              {isAdmin ? (
+                <ReconciliationPage {...shared} />
+              ) : (
+                () => { navigate("/scan"); return null; }
+              )}
+            </Route>
+            <Route path="/admin/events">
+              {isAdmin ? (
+                <EventComparisonPage {...shared} />
+              ) : (
+                () => { navigate("/scan"); return null; }
+              )}
             </Route>
             <Route path="/admin/users">
               {isAdmin ? (

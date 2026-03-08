@@ -2,12 +2,16 @@ import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import passport from "passport";
 import bcrypt from "bcryptjs";
+import multer from "multer";
 import { storage } from "./storage";
 import { generateTicketQR } from "./qrcode";
 import { generateTicketPDF } from "./pdfGenerator";
 import { sendTicketEmail } from "./emailService";
 import { insertTicketSchema } from "@shared/schema";
+import { parseCsvContent, checkDatabaseDuplicates } from "./csvParser";
 import { z } from "zod";
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (req.isAuthenticated()) return next();
@@ -355,6 +359,447 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       res.json({ message: "User deleted" });
     } catch (err) {
       res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
+  app.post("/api/admin/csv/upload", requireAdmin, upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+      const csvContent = req.file.buffer.toString("utf-8");
+      const parseResult = parseCsvContent(csvContent);
+
+      const existingOrderNumbers = await storage.getAllOrderNumbers();
+      const dbDuplicates = checkDatabaseDuplicates(parseResult.rows, existingOrderNumbers);
+
+      const newRows = parseResult.rows.filter(
+        row => !existingOrderNumbers.has(row.orderNumber)
+      );
+
+      const user = req.user as any;
+      const csvUpload = await storage.createCsvUpload({
+        fileName: req.file.originalname,
+        uploadedBy: user.username,
+        recordCount: newRows.length,
+        status: "active",
+      });
+
+      const ordersToInsert = newRows.map(row => ({
+        importId: csvUpload.id,
+        orderNumber: row.orderNumber,
+        email: row.email || null,
+        billingName: row.billingName || null,
+        phone: row.phone || null,
+        orderStatus: row.orderStatus || null,
+        createdAt: row.createdAt || null,
+        productRaw: row.productRaw || null,
+        parsedEventDate: row.parsedEventDate || null,
+        parsedEventTime: row.parsedEventTime || null,
+        parsedTicketType: row.parsedTicketType || null,
+        parsedClassName: row.parsedClassName || null,
+        skus: row.skus || null,
+        price: row.price || null,
+        quantity: row.quantity,
+        currency: row.currency || null,
+        subtotal: row.subtotal || null,
+        shipping: row.shipping || null,
+        taxes: row.taxes || null,
+        discountCode: row.discountCode || null,
+        giftCard: row.giftCard || null,
+        streetAddress: row.streetAddress || null,
+        city: row.city || null,
+        state: row.state || null,
+        postal: row.postal || null,
+        paymentMethod: row.paymentMethod || null,
+        notes: row.notes || null,
+        orderType: row.orderType,
+        reconciliationStatus: "pending",
+      }));
+
+      const created = await storage.bulkCreateHostingerOrders(ordersToInsert);
+
+      for (const row of newRows) {
+        if (row.email) {
+          try {
+            await storage.createOrUpdateCustomer({
+              name: row.billingName || row.email,
+              email: row.email,
+              phone: row.phone || null,
+              streetAddress: row.streetAddress || null,
+              city: row.city || null,
+              state: row.state || null,
+              postal: row.postal || null,
+              eventsAttended: row.parsedClassName ? [row.parsedClassName] : [],
+              ticketTypes: row.parsedTicketType ? [row.parsedTicketType] : [],
+            });
+          } catch (e) {
+            // non-blocking
+          }
+        }
+      }
+
+      res.json({
+        upload: csvUpload,
+        imported: created.length,
+        totalParsed: parseResult.totalParsed,
+        duplicatesInCsv: parseResult.duplicatesInCsv,
+        duplicatesInDb: dbDuplicates,
+        skipped: dbDuplicates.length,
+      });
+    } catch (err) {
+      console.error("CSV upload error:", err);
+      res.status(500).json({ error: "Failed to process CSV upload" });
+    }
+  });
+
+  app.get("/api/admin/csv/uploads", requireAdmin, async (_req, res) => {
+    try {
+      const uploads = await storage.listCsvUploads();
+      res.json(uploads);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch upload history" });
+    }
+  });
+
+  app.post("/api/admin/csv/uploads/:id/revert", requireAdmin, async (req, res) => {
+    try {
+      const upload = await storage.getCsvUpload(req.params.id);
+      if (!upload) return res.status(404).json({ error: "Upload not found" });
+      if (upload.status === "reverted") return res.status(400).json({ error: "Upload already reverted" });
+
+      const deletedCount = await storage.deleteHostingerOrdersByImportId(req.params.id);
+      await storage.updateCsvUploadStatus(req.params.id, "reverted");
+
+      res.json({ message: "Upload reverted", deletedRecords: deletedCount });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to revert upload" });
+    }
+  });
+
+  app.get("/api/admin/csv/orders", requireAdmin, async (_req, res) => {
+    try {
+      const orders = await storage.listHostingerOrders();
+      res.json(orders);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch orders" });
+    }
+  });
+
+  app.get("/api/admin/reconciliation", requireAdmin, async (_req, res) => {
+    try {
+      const hostingerOrdersList = await storage.listHostingerOrders();
+      const ticketList = await storage.listTickets();
+      const eventList = await storage.listEvents();
+
+      const eventMap = new Map(eventList.map(e => [e.id, e]));
+
+      const ticketsByEmail = new Map<string, typeof ticketList>();
+      for (const ticket of ticketList) {
+        const key = ticket.purchaserEmail.toLowerCase();
+        if (!ticketsByEmail.has(key)) ticketsByEmail.set(key, []);
+        ticketsByEmail.get(key)!.push(ticket);
+      }
+
+      const csvEmails = new Set(hostingerOrdersList.map(o => (o.email || "").toLowerCase()).filter(Boolean));
+
+      const divergences: any[] = [];
+
+      for (const order of hostingerOrdersList) {
+        const emailKey = (order.email || "").toLowerCase();
+        const matchingTickets = ticketsByEmail.get(emailKey) || [];
+
+        if (matchingTickets.length === 0) {
+          divergences.push({
+            id: order.id,
+            type: "missing_in_stripe",
+            source: "csv",
+            orderNumber: order.orderNumber,
+            email: order.email,
+            billingName: order.billingName,
+            csvPrice: order.price,
+            csvProduct: order.productRaw,
+            csvTicketType: order.parsedTicketType,
+            orderType: order.orderType,
+            eventDate: order.parsedEventDate,
+            stripeData: null,
+          });
+        } else {
+          let bestMatch: { ticket: typeof ticketList[0]; event: typeof eventList[0] | undefined; diffs: string[] } | null = null;
+          let perfectMatch = false;
+
+          for (const ticket of matchingTickets) {
+            const event = eventMap.get(ticket.eventId);
+            const diffs: string[] = [];
+
+            if (order.billingName && ticket.purchaserName &&
+                order.billingName.toLowerCase() !== ticket.purchaserName.toLowerCase()) {
+              diffs.push("name");
+            }
+
+            if (order.price && event?.priceInCents) {
+              const csvPriceCents = Math.round(parseFloat(order.price.replace(/[^0-9.]/g, "")) * 100);
+              if (csvPriceCents !== event.priceInCents) {
+                diffs.push("price");
+              }
+            }
+
+            if (order.parsedTicketType && ticket.ticketType &&
+                order.parsedTicketType.toLowerCase() !== ticket.ticketType.toLowerCase()) {
+              diffs.push("ticketType");
+            }
+
+            if (diffs.length === 0) {
+              perfectMatch = true;
+              break;
+            }
+
+            if (!bestMatch || diffs.length < bestMatch.diffs.length) {
+              bestMatch = { ticket, event, diffs };
+            }
+          }
+
+          if (!perfectMatch && bestMatch) {
+            divergences.push({
+              id: order.id,
+              type: "data_mismatch",
+              source: "both",
+              orderNumber: order.orderNumber,
+              email: order.email,
+              billingName: order.billingName,
+              csvPrice: order.price,
+              csvProduct: order.productRaw,
+              csvTicketType: order.parsedTicketType,
+              orderType: order.orderType,
+              eventDate: order.parsedEventDate,
+              stripeData: {
+                ticketId: bestMatch.ticket.id,
+                name: bestMatch.ticket.purchaserName,
+                email: bestMatch.ticket.purchaserEmail,
+                ticketType: bestMatch.ticket.ticketType,
+                eventName: bestMatch.event?.name,
+                priceInCents: bestMatch.event?.priceInCents,
+              },
+              differences: bestMatch.diffs,
+            });
+          }
+        }
+      }
+
+      for (const ticket of ticketList) {
+        if (!ticket.stripeSessionId) continue;
+        const emailKey = ticket.purchaserEmail.toLowerCase();
+        if (!csvEmails.has(emailKey)) {
+          const event = eventMap.get(ticket.eventId);
+          divergences.push({
+            id: ticket.id,
+            type: "missing_in_csv",
+            source: "stripe",
+            orderNumber: null,
+            email: ticket.purchaserEmail,
+            billingName: ticket.purchaserName,
+            csvPrice: null,
+            csvProduct: null,
+            csvTicketType: null,
+            orderType: "ticket",
+            eventDate: event?.date,
+            stripeData: {
+              ticketId: ticket.id,
+              name: ticket.purchaserName,
+              email: ticket.purchaserEmail,
+              ticketType: ticket.ticketType,
+              eventName: event?.name,
+              priceInCents: event?.priceInCents,
+            },
+          });
+        }
+      }
+
+      const summary = {
+        totalCsvRecords: hostingerOrdersList.length,
+        totalStripeTickets: ticketList.filter(t => t.stripeSessionId).length,
+        totalDivergences: divergences.length,
+        missingInStripe: divergences.filter(d => d.type === "missing_in_stripe").length,
+        missingInCsv: divergences.filter(d => d.type === "missing_in_csv").length,
+        dataMismatches: divergences.filter(d => d.type === "data_mismatch").length,
+        reconciled: hostingerOrdersList.length - divergences.filter(d => d.source === "csv" || d.source === "both").length,
+      };
+
+      res.json({ divergences, summary });
+    } catch (err) {
+      console.error("Reconciliation error:", err);
+      res.status(500).json({ error: "Failed to run reconciliation" });
+    }
+  });
+
+  app.post("/api/admin/reconciliation/apply", requireAdmin, async (req, res) => {
+    try {
+      const { action, ids } = req.body;
+      if (!action || !Array.isArray(ids)) {
+        return res.status(400).json({ error: "action and ids[] required" });
+      }
+
+      let processed = 0;
+      if (action === "delete") {
+        for (const id of ids) {
+          const updated = await storage.updateHostingerOrder(id, { reconciliationStatus: "deleted" });
+          if (updated) processed++;
+        }
+      } else if (action === "reconcile") {
+        for (const id of ids) {
+          const updated = await storage.updateHostingerOrder(id, { reconciliationStatus: "reconciled" });
+          if (updated) processed++;
+        }
+      }
+
+      res.json({ message: `${processed} records processed`, processed });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to apply reconciliation" });
+    }
+  });
+
+  app.patch("/api/admin/reconciliation/:id", requireAdmin, async (req, res) => {
+    try {
+      const { billingName, email, price, parsedTicketType } = req.body;
+      const updateData: any = {};
+      if (billingName !== undefined) updateData.billingName = billingName;
+      if (email !== undefined) updateData.email = email;
+      if (price !== undefined) updateData.price = price;
+      if (parsedTicketType !== undefined) updateData.parsedTicketType = parsedTicketType;
+
+      const updated = await storage.updateHostingerOrder(req.params.id, updateData);
+      if (!updated) return res.status(404).json({ error: "Order not found" });
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update order" });
+    }
+  });
+
+  app.get("/api/admin/reconciliation/export", requireAdmin, async (_req, res) => {
+    try {
+      const hostingerOrdersList = await storage.listHostingerOrders();
+      const ticketList = await storage.listTickets();
+      const eventList = await storage.listEvents();
+      const eventMap = new Map(eventList.map(e => [e.id, e]));
+
+      const ticketsByEmail = new Map<string, typeof ticketList>();
+      for (const ticket of ticketList) {
+        const key = ticket.purchaserEmail.toLowerCase();
+        if (!ticketsByEmail.has(key)) ticketsByEmail.set(key, []);
+        ticketsByEmail.get(key)!.push(ticket);
+      }
+
+      const csvEmails = new Set(hostingerOrdersList.map(o => (o.email || "").toLowerCase()).filter(Boolean));
+
+      let csv = "Type,Source,Order Number,Email,CSV Name,Stripe Name,CSV Price,Stripe Price,Product,Event Date,Differences\n";
+
+      for (const order of hostingerOrdersList) {
+        const emailKey = (order.email || "").toLowerCase();
+        const matchingTickets = ticketsByEmail.get(emailKey) || [];
+
+        if (matchingTickets.length === 0) {
+          csv += `Missing in Stripe,CSV,${order.orderNumber},${order.email},${order.billingName},,${order.price},,${order.productRaw},${order.parsedEventDate},\n`;
+        } else {
+          for (const ticket of matchingTickets) {
+            const event = eventMap.get(ticket.eventId);
+            const diffs: string[] = [];
+            if (order.billingName && ticket.purchaserName && order.billingName.toLowerCase() !== ticket.purchaserName.toLowerCase()) diffs.push("name");
+            if (order.price && event?.priceInCents) {
+              const csvPriceCents = Math.round(parseFloat(order.price.replace(/[^0-9.]/g, "")) * 100);
+              if (csvPriceCents !== event.priceInCents) diffs.push("price");
+            }
+            if (diffs.length > 0) {
+              csv += `Data Mismatch,Both,${order.orderNumber},${order.email},${order.billingName},${ticket.purchaserName},${order.price},${event?.priceInCents ? (event.priceInCents / 100).toFixed(2) : ""},${order.productRaw},${order.parsedEventDate},${diffs.join(";")}\n`;
+            }
+          }
+        }
+      }
+
+      for (const ticket of ticketList) {
+        if (!ticket.stripeSessionId) continue;
+        const emailKey = ticket.purchaserEmail.toLowerCase();
+        if (!csvEmails.has(emailKey)) {
+          const event = eventMap.get(ticket.eventId);
+          csv += `Missing in CSV,Stripe,,${ticket.purchaserEmail},,${ticket.purchaserName},,${event?.priceInCents ? (event.priceInCents / 100).toFixed(2) : ""},${event?.name},${event?.date},\n`;
+        }
+      }
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", "attachment; filename=reconciliation-export.csv");
+      res.send(csv);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to export reconciliation" });
+    }
+  });
+
+  app.get("/api/admin/events/comparison", requireAdmin, async (_req, res) => {
+    try {
+      const eventList = await storage.listEvents();
+      const ticketList = await storage.listTickets();
+      const hostingerOrdersList = await storage.listHostingerOrders();
+
+      const comparison = eventList.map(event => {
+        const eventTickets = ticketList.filter(t => t.eventId === event.id);
+        const csvOrders = hostingerOrdersList.filter(o =>
+          o.parsedClassName && event.name && (
+            event.name.toLowerCase().includes(o.parsedClassName.toLowerCase()) ||
+            o.parsedClassName.toLowerCase().includes(event.name.toLowerCase()) ||
+            o.parsedEventDate === event.date
+          )
+        );
+
+        const memberTickets = eventTickets.filter(t => t.ticketType.toLowerCase().includes("member"));
+        const generalTickets = eventTickets.filter(t =>
+          t.ticketType.toLowerCase().includes("general") || t.ticketType.toLowerCase() === "general admission"
+        );
+        const vendorOrders = csvOrders.filter(o => o.orderType === "vendor");
+        const ticketOrders = csvOrders.filter(o => o.orderType === "ticket");
+
+        const revenueCents = eventTickets
+          .filter(t => t.stripeSessionId && (t.status === "valid" || t.status === "used"))
+          .length * (event.priceInCents || 0);
+
+        const csvRevenue = ticketOrders.reduce((sum, o) => {
+          const price = parseFloat((o.subtotal || o.price || "0").replace(/[^0-9.]/g, ""));
+          return sum + (isNaN(price) ? 0 : price);
+        }, 0);
+
+        const classBreakdown: Record<string, number> = {};
+        for (const order of csvOrders) {
+          const cls = order.parsedClassName || "Unknown";
+          classBreakdown[cls] = (classBreakdown[cls] || 0) + (order.quantity || 1);
+        }
+
+        const timeBreakdown: Record<string, number> = {};
+        for (const order of csvOrders) {
+          const time = order.parsedEventTime || "Unknown";
+          timeBreakdown[time] = (timeBreakdown[time] || 0) + (order.quantity || 1);
+        }
+
+        return {
+          eventId: event.id,
+          eventName: event.name,
+          eventDate: event.date,
+          eventTime: event.time,
+          eventType: event.eventType,
+          totalTickets: eventTickets.length,
+          memberTickets: memberTickets.length,
+          generalTickets: generalTickets.length,
+          vendorCount: vendorOrders.length,
+          stripeRevenueCents: revenueCents,
+          csvRevenue,
+          capacity: event.capacity,
+          occupancyRate: event.capacity ? Math.round((eventTickets.length / event.capacity) * 100) : null,
+          checkedIn: eventTickets.filter(t => t.status === "used").length,
+          classBreakdown,
+          timeBreakdown,
+          csvOrderCount: csvOrders.length,
+        };
+      });
+
+      res.json(comparison);
+    } catch (err) {
+      console.error("Event comparison error:", err);
+      res.status(500).json({ error: "Failed to generate event comparison" });
     }
   });
 }

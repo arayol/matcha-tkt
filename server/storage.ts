@@ -1,11 +1,14 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
 import { db } from "./db";
 import bcrypt from "bcryptjs";
 import {
-  users, events, tickets,
+  users, events, tickets, csvUploads, hostingerOrders, customers,
   type User, type InsertUser,
   type Event, type InsertEvent,
   type Ticket, type InsertTicket,
+  type CsvUpload, type InsertCsvUpload,
+  type HostingerOrder, type InsertHostingerOrder,
+  type Customer, type InsertCustomer,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -33,6 +36,24 @@ export interface IStorage {
   deleteUser(id: string): Promise<boolean>;
   updateUserRole(id: string, role: string): Promise<User | undefined>;
   updateUserPassword(id: string, hashedPassword: string): Promise<void>;
+
+  createCsvUpload(upload: InsertCsvUpload): Promise<CsvUpload>;
+  getCsvUpload(id: string): Promise<CsvUpload | undefined>;
+  listCsvUploads(): Promise<CsvUpload[]>;
+  updateCsvUploadStatus(id: string, status: string): Promise<CsvUpload | undefined>;
+
+  createHostingerOrder(order: InsertHostingerOrder): Promise<HostingerOrder>;
+  bulkCreateHostingerOrders(orders: InsertHostingerOrder[]): Promise<HostingerOrder[]>;
+  getHostingerOrderByOrderNumber(orderNumber: string): Promise<HostingerOrder | undefined>;
+  listHostingerOrders(): Promise<HostingerOrder[]>;
+  listHostingerOrdersByImportId(importId: string): Promise<HostingerOrder[]>;
+  deleteHostingerOrdersByImportId(importId: string): Promise<number>;
+  updateHostingerOrder(id: string, data: Partial<HostingerOrder>): Promise<HostingerOrder | undefined>;
+  getAllOrderNumbers(): Promise<Set<string>>;
+
+  createOrUpdateCustomer(data: InsertCustomer): Promise<Customer>;
+  getCustomerByEmail(email: string): Promise<Customer | undefined>;
+  listCustomers(): Promise<Customer[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -141,6 +162,102 @@ export class DatabaseStorage implements IStorage {
 
   async updateUserPassword(id: string, hashedPassword: string): Promise<void> {
     await db.update(users).set({ password: hashedPassword }).where(eq(users.id, id));
+  }
+
+  async createCsvUpload(upload: InsertCsvUpload): Promise<CsvUpload> {
+    const [created] = await db.insert(csvUploads).values(upload).returning();
+    return created;
+  }
+
+  async getCsvUpload(id: string): Promise<CsvUpload | undefined> {
+    const [upload] = await db.select().from(csvUploads).where(eq(csvUploads.id, id));
+    return upload;
+  }
+
+  async listCsvUploads(): Promise<CsvUpload[]> {
+    return db.select().from(csvUploads).orderBy(desc(csvUploads.uploadedAt));
+  }
+
+  async updateCsvUploadStatus(id: string, status: string): Promise<CsvUpload | undefined> {
+    const [updated] = await db.update(csvUploads).set({ status }).where(eq(csvUploads.id, id)).returning();
+    return updated;
+  }
+
+  async createHostingerOrder(order: InsertHostingerOrder): Promise<HostingerOrder> {
+    const [created] = await db.insert(hostingerOrders).values(order).returning();
+    return created;
+  }
+
+  async bulkCreateHostingerOrders(orders: InsertHostingerOrder[]): Promise<HostingerOrder[]> {
+    if (orders.length === 0) return [];
+    const created = await db.insert(hostingerOrders).values(orders).returning();
+    return created;
+  }
+
+  async getHostingerOrderByOrderNumber(orderNumber: string): Promise<HostingerOrder | undefined> {
+    const [order] = await db.select().from(hostingerOrders).where(eq(hostingerOrders.orderNumber, orderNumber));
+    return order;
+  }
+
+  async listHostingerOrders(): Promise<HostingerOrder[]> {
+    return db.select().from(hostingerOrders);
+  }
+
+  async listHostingerOrdersByImportId(importId: string): Promise<HostingerOrder[]> {
+    return db.select().from(hostingerOrders).where(eq(hostingerOrders.importId, importId));
+  }
+
+  async deleteHostingerOrdersByImportId(importId: string): Promise<number> {
+    const deleted = await db.delete(hostingerOrders).where(eq(hostingerOrders.importId, importId)).returning();
+    return deleted.length;
+  }
+
+  async updateHostingerOrder(id: string, data: Partial<HostingerOrder>): Promise<HostingerOrder | undefined> {
+    const [updated] = await db.update(hostingerOrders).set(data).where(eq(hostingerOrders.id, id)).returning();
+    return updated;
+  }
+
+  async getAllOrderNumbers(): Promise<Set<string>> {
+    const orders = await db.select({ orderNumber: hostingerOrders.orderNumber }).from(hostingerOrders);
+    return new Set(orders.map(o => o.orderNumber));
+  }
+
+  async createOrUpdateCustomer(data: InsertCustomer): Promise<Customer> {
+    const existing = await this.getCustomerByEmail(data.email);
+    if (existing) {
+      const updateData: Partial<Customer> = { updatedAt: new Date() };
+      if (data.name && !existing.name) updateData.name = data.name;
+      if (data.phone && !existing.phone) updateData.phone = data.phone;
+      if (data.streetAddress && !existing.streetAddress) updateData.streetAddress = data.streetAddress;
+      if (data.city && !existing.city) updateData.city = data.city;
+      if (data.state && !existing.state) updateData.state = data.state;
+      if (data.postal && !existing.postal) updateData.postal = data.postal;
+
+      const newEvents = data.eventsAttended || [];
+      const existingEvents = existing.eventsAttended || [];
+      const mergedEvents = [...new Set([...existingEvents, ...newEvents])];
+      updateData.eventsAttended = mergedEvents;
+
+      const newTypes = data.ticketTypes || [];
+      const existingTypes = existing.ticketTypes || [];
+      const mergedTypes = [...new Set([...existingTypes, ...newTypes])];
+      updateData.ticketTypes = mergedTypes;
+
+      const [updated] = await db.update(customers).set(updateData).where(eq(customers.id, existing.id)).returning();
+      return updated;
+    }
+
+    const [created] = await db.insert(customers).values(data).returning();
+    return created;
+  }
+
+  async getCustomerByEmail(email: string): Promise<Customer | undefined> {
+    const [customer] = await db.select().from(customers).where(eq(customers.email, email));
+    return customer;
+  }
+
+  async listCustomers(): Promise<Customer[]> {
+    return db.select().from(customers);
   }
 }
 

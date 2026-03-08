@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import {
   LayoutDashboard, Ticket, LogOut, ScanLine, Gift, Users,
-  Menu, X, Moon, Sun, Shield,
+  Menu, X, Moon, Sun, Shield, FileSpreadsheet, GitCompareArrows, BarChart3,
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -25,6 +25,9 @@ export default function AppLayout({ dark, toggleTheme, onLogout, user, activePat
     { icon: ScanLine, label: "Scanner", href: "/scan", adminOnly: false },
     { icon: Ticket, label: "Tickets", href: "/tickets", adminOnly: true },
     { icon: Gift, label: "Courtesy Ticket", href: "/courtesy", adminOnly: false },
+    ...(isAdmin ? [{ icon: FileSpreadsheet, label: "CSV Import", href: "/admin/csv", adminOnly: false }] : []),
+    ...(isAdmin ? [{ icon: GitCompareArrows, label: "Reconciliation", href: "/admin/reconciliation", adminOnly: false }] : []),
+    ...(isAdmin ? [{ icon: BarChart3, label: "Event Comparison", href: "/admin/events", adminOnly: false }] : []),
     ...(isAdmin ? [{ icon: Users, label: "User Management", href: "/admin/users", adminOnly: false }] : []),
   ];
 
@@ -35,6 +38,9 @@ export default function AppLayout({ dark, toggleTheme, onLogout, user, activePat
     { icon: ScanLine, label: "Scanner", href: "/scan" },
     ...(isAdmin ? [{ icon: Ticket, label: "Tickets", href: "/tickets" }] : []),
     { icon: Gift, label: "Courtesy", href: "/courtesy" },
+    ...(isAdmin ? [{ icon: FileSpreadsheet, label: "CSV Import", href: "/admin/csv" }] : []),
+    ...(isAdmin ? [{ icon: GitCompareArrows, label: "Reconciliation", href: "/admin/reconciliation" }] : []),
+    ...(isAdmin ? [{ icon: BarChart3, label: "Events", href: "/admin/events" }] : []),
     ...(isAdmin ? [{ icon: Users, label: "Users", href: "/admin/users" }] : []),
   ];
 

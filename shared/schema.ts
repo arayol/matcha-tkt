@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -56,3 +56,72 @@ export const tickets = pgTable("tickets", {
 export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true, purchasedAt: true, usedAt: true });
 export type InsertTicket = z.infer<typeof insertTicketSchema>;
 export type Ticket = typeof tickets.$inferSelect;
+
+export const csvUploads = pgTable("csv_uploads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fileName: text("file_name").notNull(),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+  uploadedBy: text("uploaded_by").notNull(),
+  recordCount: integer("record_count").notNull().default(0),
+  status: text("status").notNull().default("active"),
+});
+
+export const insertCsvUploadSchema = createInsertSchema(csvUploads).omit({ id: true, uploadedAt: true });
+export type InsertCsvUpload = z.infer<typeof insertCsvUploadSchema>;
+export type CsvUpload = typeof csvUploads.$inferSelect;
+
+export const hostingerOrders = pgTable("hostinger_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  importId: varchar("import_id").notNull(),
+  orderNumber: text("order_number").notNull(),
+  email: text("email"),
+  billingName: text("billing_name"),
+  phone: text("phone"),
+  orderStatus: text("order_status"),
+  createdAt: text("created_at"),
+  productRaw: text("product_raw"),
+  parsedEventDate: text("parsed_event_date"),
+  parsedEventTime: text("parsed_event_time"),
+  parsedTicketType: text("parsed_ticket_type"),
+  parsedClassName: text("parsed_class_name"),
+  skus: text("skus"),
+  price: text("price"),
+  quantity: integer("quantity"),
+  currency: text("currency"),
+  subtotal: text("subtotal"),
+  shipping: text("shipping"),
+  taxes: text("taxes"),
+  discountCode: text("discount_code"),
+  giftCard: text("gift_card"),
+  streetAddress: text("street_address"),
+  city: text("city"),
+  state: text("state"),
+  postal: text("postal"),
+  paymentMethod: text("payment_method"),
+  notes: text("notes"),
+  orderType: text("order_type").notNull().default("ticket"),
+  reconciliationStatus: text("reconciliation_status").default("pending"),
+});
+
+export const insertHostingerOrderSchema = createInsertSchema(hostingerOrders).omit({ id: true });
+export type InsertHostingerOrder = z.infer<typeof insertHostingerOrderSchema>;
+export type HostingerOrder = typeof hostingerOrders.$inferSelect;
+
+export const customers = pgTable("customers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  phone: text("phone"),
+  streetAddress: text("street_address"),
+  city: text("city"),
+  state: text("state"),
+  postal: text("postal"),
+  eventsAttended: text("events_attended").array(),
+  ticketTypes: text("ticket_types").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
+export type Customer = typeof customers.$inferSelect;
