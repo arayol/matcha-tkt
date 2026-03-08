@@ -4,3 +4,12 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+.local/
+.config/
+.cache/
+.agents/
+/tmp/
+*.log
+.env
+.env.local
+generated-icon.png

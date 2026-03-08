@@ -135,6 +135,9 @@ Examples:
 Parser extracts: parsedEventDate, parsedEventTime, parsedEventType, parsedTicketType, parsedClassName, orderType (ticket/vendor)
 Events are identified by date (month + day). Admin can assign custom event names via the "Event Names by Date" section on the Reconciliation page (stored in event_date_names table).
 
+## Setup on New Replit
+See `SETUP.md` for full setup instructions including database schema, environment variables, integrations, and project structure.
+
 ## User Preferences
 - All app UI text, labels, and content must be in **English (US)**.
 
