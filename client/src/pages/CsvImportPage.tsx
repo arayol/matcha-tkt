@@ -107,35 +107,73 @@ export default function CsvImportPage({ dark, toggleTheme, onLogout, user }: Csv
   });
 
   const parseCsvPreview = useCallback((text: string) => {
+    const parseCsvLine = (line: string): string[] => {
+      const fields: string[] = [];
+      let current = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuotes) {
+          if (ch === '"') {
+            if (i + 1 < line.length && line[i + 1] === '"') {
+              current += '"';
+              i++;
+            } else {
+              inQuotes = false;
+            }
+          } else {
+            current += ch;
+          }
+        } else {
+          if (ch === '"') {
+            inQuotes = true;
+          } else if (ch === ',') {
+            fields.push(current.trim());
+            current = "";
+          } else {
+            current += ch;
+          }
+        }
+      }
+      fields.push(current.trim());
+      return fields;
+    };
+
     const lines = text.split("\n").filter((l) => l.trim());
     if (lines.length < 2) return [];
 
-    const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
+    const headers = parseCsvLine(lines[0]);
 
     const findCol = (names: string[]) => {
       for (const name of names) {
-        const idx = headers.findIndex((h) => h.toLowerCase().includes(name.toLowerCase()));
+        const lower = name.toLowerCase();
+        const idx = headers.findIndex((h) => h.toLowerCase() === lower);
+        if (idx !== -1) return idx;
+      }
+      for (const name of names) {
+        const lower = name.toLowerCase();
+        const idx = headers.findIndex((h) => h.toLowerCase().includes(lower));
         if (idx !== -1) return idx;
       }
       return -1;
     };
 
-    const orderCol = findCol(["Order Number", "Order"]);
-    const emailCol = findCol(["Email"]);
-    const nameCol = findCol(["Billing Name", "Name"]);
+    const orderCol = findCol(["Order Number", "Order #", "Order"]);
+    const emailCol = findCol(["Email", "Billing Email"]);
+    const nameCol = findCol(["Billing Name", "Customer Name", "Name"]);
     const phoneCol = findCol(["Billing Phone", "Phone"]);
-    const productCol = findCol(["Product"]);
-    const priceCol = findCol(["Price"]);
+    const productCol = findCol(["Product Names", "Product Name", "Product"]);
+    const priceCol = findCol(["Price", "Unit Price"]);
     const subtotalCol = findCol(["Subtotal", "Total", "Amount"]);
-    const discountCol = findCol(["Discount Code", "Discount", "Coupon"]);
+    const discountCol = findCol(["Discount Amount", "Discount Code", "Discount", "Coupon"]);
     const qtyCol = findCol(["Quantity", "Qty"]);
-    const statusCol = findCol(["Status"]);
+    const statusCol = findCol(["Status", "Order Status"]);
 
     const rows: ParsedPreviewRow[] = [];
     const maxPreview = Math.min(lines.length, 21);
 
     for (let i = 1; i < maxPreview; i++) {
-      const cols = lines[i].split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+      const cols = parseCsvLine(lines[i]);
       rows.push({
         orderNumber: orderCol >= 0 ? cols[orderCol] || "" : "",
         email: emailCol >= 0 ? cols[emailCol] || "" : "",
