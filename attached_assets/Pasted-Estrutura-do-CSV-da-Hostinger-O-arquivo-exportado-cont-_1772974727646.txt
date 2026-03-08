@@ -1,0 +1,36 @@
+Estrutura do CSV da Hostinger
+O arquivo exportado contém as colunas: Order Number, Email, Billing Name, Phone, Status, Created, Product (nome concatenado com: data do evento + horário + tipo de ticket + nome da classe), SKUs, Price, Quantity, Currency, Subtotal, Shipping, Taxes, Discount Code, Gift Card, Street Address, City, State, Postal, Payment Method, Notes.
+O mesmo arquivo pode conter tanto vendas de ingressos (Members / General Admission) quanto vendas de espaços para Vendors/Expositores — o sistema deve identificar e separar esses dois tipos automaticamente pelo campo Product.
+
+Módulo 1 — Upload e Armazenamento do CSV (Admin only)
+Adicionar link na sidebar visível somente para admins, apontando para uma página dedicada de importação. A página permite anexar e fazer upload do CSV da Hostinger. Os dados devem ser armazenados em uma tabela separada (hostinger_orders) para não contaminar os dados do Stripe. O CSV é a fonte de verdade: seus dados têm prioridade e devem enriquecer os registros existentes (preenchendo campos em branco ou corrigindo divergências).
+Parsing inteligente do campo Product: extrair automaticamente do texto concatenado os seguintes campos: data do evento, horário, tipo de ticket (Members / General Admission / Vendor / Expositor) e nome da classe — mapeando para colunas estruturadas no banco.
+Deduplicação: antes de salvar, detectar e alertar sobre registros duplicados (por Order Number ou combinação email + evento + data), tanto no CSV quanto já existentes no banco.
+Histórico de uploads: registrar data/hora e usuário de cada importação. Manter histórico com opção de reverter a última importação.
+
+Módulo 2 — Conciliação CSV × Stripe
+Após o upload, comparar automaticamente os registros da hostinger_orders com os recebidos via webhook do Stripe. Exibir lista de divergências com:
+
+Badge indicando a fonte (CSV ou Stripe) e o tipo de divergência: ausente no Stripe, ausente no CSV, dados divergentes (nome, email, valor, etc.)
+Checkbox por item para operações em massa: atualizar base de dados ou deletar
+Botão de edição individual por item para correção manual pelo admin
+Filtros: por tipo (ingresso vs. vendor), por status da divergência, por evento/data
+
+Painel de resumo pós-conciliação: total de registros importados, conciliados, divergentes e pendentes de ação.
+Exportação: botão para baixar a lista de divergências como CSV para auditoria externa.
+
+Módulo 3 — Dashboard Comparativo de Eventos (Admin only)
+Painel exclusivo para admins com gráficos e tabelas comparativas entre eventos. O admin poderá importar CSVs de até os últimos 10 eventos para análise histórica. Métricas a exibir:
+
+Total de ingressos vendidos por evento (Members vs. General Admission)
+Receita total por evento
+Número de Vendors/Expositores por evento
+Taxa de ocupação por classe/horário
+Comparativo lado a lado entre eventos (barras, linhas ou tabela)
+
+Preparado para expansão: estrutura do banco deve comportar futuramente a importação de custos por evento (produção, local, marketing etc.), permitindo calcular margem e lucro por evento.
+
+Funcionalidades de Email (Base para Futuro)
+O cadastro de clientes construído via CSV deve armazenar: nome, email, telefone, eventos frequentados e tipo de ingresso. Essa base será usada futuramente para envio de emails diretamente pela plataforma (confirmações, lembretes, campanhas). Garantir que o schema do banco já comporte esses campos desde o início.
+
+Quer que eu ajuste algum módulo ou detalhe mais alguma parte antes de levar para o Replit?
