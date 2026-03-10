@@ -104,6 +104,10 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
     queryKey: ["/api/admin/csv/orders"],
   });
 
+  const { data: eventsData } = useQuery<any[]>({
+    queryKey: ["/api/events"],
+  });
+
   const applyMutation = useMutation({
     mutationFn: (body: { action: string; ids: string[] }) =>
       apiRequest("POST", "/api/admin/reconciliation/apply", body),
@@ -335,7 +339,9 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                           const allDates = new Set<string>();
                           (csvOrders || []).forEach((o: any) => { if (o.parsedEventDate) allDates.add(o.parsedEventDate); });
                           divergences.forEach(d => { if (d.eventDate) allDates.add(d.eventDate); });
-                          return Array.from(allDates).sort((a, b) => parseDateSort(b) - parseDateSort(a)).map(date => (
+                          (eventsData || []).forEach((e: any) => { if (e.date && e.date !== "TBD") allDates.add(e.date); });
+                          const sorted = Array.from(allDates).sort((a, b) => parseDateSort(b) - parseDateSort(a));
+                          return sorted.map(date => (
                             <SelectItem key={date} value={date}>{date}</SelectItem>
                           ));
                         })()}

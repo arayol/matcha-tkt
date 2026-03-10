@@ -104,7 +104,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
       const event = await storage.getEvent(ticket.eventId);
-      res.json({ ticket, event });
+
+      let displayName = event?.name;
+      if (event?.date && event.date !== "TBD") {
+        const eventDateNames = await storage.listEventDateNames();
+        const mapping = eventDateNames.find(edn => edn.eventDate === event.date);
+        if (mapping) displayName = mapping.eventName;
+      }
+
+      res.json({ ticket, event: event ? { ...event, displayName } : event });
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch ticket" });
     }
@@ -213,7 +221,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (ticket.status === "cancelled") return res.status(400).json({ error: "Ticket is cancelled" });
 
       const event = ticket.eventId ? await storage.getEvent(ticket.eventId) : undefined;
-      const pdfBuffer = await generateTicketPDF(ticket, event);
+
+      let resolvedEvent = event;
+      if (event?.date && event.date !== "TBD") {
+        const eventDateNames = await storage.listEventDateNames();
+        const mapping = eventDateNames.find(edn => edn.eventDate === event.date);
+        if (mapping) resolvedEvent = { ...event, name: mapping.eventName };
+      }
+
+      const pdfBuffer = await generateTicketPDF(ticket, resolvedEvent);
 
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="ticket-${req.params.urlSlug}.pdf"`);

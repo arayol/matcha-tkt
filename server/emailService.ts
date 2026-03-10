@@ -142,11 +142,10 @@ function buildTicketEmailHtml(params: {
   ticketUrl: string;
   isCourtesy: boolean;
 }) {
-  const baseUrl = process.env.REPLIT_DEV_DOMAIN
-    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-    : process.env.REPL_SLUG
-      ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-      : "http://localhost:5000";
+  const baseUrl = process.env.APP_BASE_URL
+    || (process.env.WEB_REPL_RENEWAL ? "https://matcha-rayol.replit.app" : null)
+    || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
+    || "http://localhost:5000";
 
   const fullTicketUrl = `${baseUrl}/ticket/${params.ticketUrl}`;
   const firstName = params.name.split(" ")[0];
@@ -206,7 +205,7 @@ function buildTicketEmailHtml(params: {
       top: -60px; left: -60px;
       width: 200px; height: 200px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(122,153,86,0.18) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(148,167,121,0.18) 0%, transparent 70%);
     }
 
     .header::after {
@@ -215,7 +214,7 @@ function buildTicketEmailHtml(params: {
       bottom: -40px; right: -40px;
       width: 160px; height: 160px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(122,153,86,0.12) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(148,167,121,0.12) 0%, transparent 70%);
     }
 
     .header img.logo {
@@ -228,12 +227,12 @@ function buildTicketEmailHtml(params: {
     .header-divider {
       width: 40px;
       height: 1px;
-      background: rgba(122,153,86,0.6);
+      background: rgba(148,167,121,0.6);
       margin: 24px auto 0;
     }
 
     .hero-band {
-      background: linear-gradient(135deg, #7a9956 0%, #5c7a3e 100%);
+      background: linear-gradient(135deg, #94a779 0%, #7a8f63 100%);
       padding: 32px 48px;
       text-align: center;
     }
@@ -283,7 +282,7 @@ function buildTicketEmailHtml(params: {
       font-weight: 400;
       letter-spacing: 1.5px;
       text-transform: uppercase;
-      color: #7a9956;
+      color: #94a779;
       margin-bottom: 32px;
       border-bottom: 1px solid #d5cfc4;
       padding-bottom: 20px;
@@ -304,7 +303,7 @@ function buildTicketEmailHtml(params: {
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 3px;
-      background: linear-gradient(90deg, #7a9956, #a3bf7a, #7a9956);
+      background: linear-gradient(90deg, #94a779, #b4c89e, #94a779);
     }
 
     .ticket-header {
@@ -327,14 +326,14 @@ function buildTicketEmailHtml(params: {
       display: inline-block;
       margin-top: 10px;
       padding: 4px 14px;
-      background: rgba(122,153,86,0.2);
-      border: 1px solid rgba(122,153,86,0.4);
+      background: rgba(148,167,121,0.2);
+      border: 1px solid rgba(148,167,121,0.4);
       border-radius: 20px;
       font-size: 11px;
       font-weight: 500;
       letter-spacing: 1.5px;
       text-transform: uppercase;
-      color: #a3bf7a;
+      color: #b4c89e;
     }
 
     .ticket-details {
@@ -413,11 +412,11 @@ function buildTicketEmailHtml(params: {
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      border: 1px solid #7a9956;
+      border: 1px solid #94a779;
       text-align: center;
       font-size: 11px;
       font-weight: 600;
-      color: #7a9956;
+      color: #94a779;
       line-height: 28px;
     }
 
@@ -445,7 +444,7 @@ function buildTicketEmailHtml(params: {
     .cta-button {
       display: inline-block;
       padding: 14px 40px;
-      background: #7a9956;
+      background: #94a779;
       color: #ffffff !important;
       text-decoration: none;
       font-size: 12px;
@@ -475,14 +474,14 @@ function buildTicketEmailHtml(params: {
     }
 
     .footer-text a {
-      color: rgba(163,191,122,0.8);
+      color: rgba(180,200,158,0.8);
       text-decoration: none;
     }
 
     .footer-divider {
       width: 30px;
       height: 1px;
-      background: rgba(122,153,86,0.3);
+      background: rgba(148,167,121,0.3);
       margin: 16px auto;
     }
   </style>

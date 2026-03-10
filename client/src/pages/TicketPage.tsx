@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { CheckCircle2, XCircle, Clock, MapPin, Calendar, Timer, User, Ticket, Download, Share2 } from "lucide-react";
 
+const MATCHA_GREEN = "#94a779";
+
 export default function TicketPage() {
   const params = useParams<{ slug: string }>();
   const [copied, setCopied] = useState(false);
@@ -77,12 +79,12 @@ export default function TicketPage() {
       <div className="w-full max-w-md space-y-4">
         <div className="rounded-3xl border border-card-border bg-card shadow-card overflow-hidden">
 
-          <div className="bg-primary p-6 text-center">
-            <Ticket className="h-8 w-8 text-primary-foreground mx-auto mb-2" />
-            <h1 className="text-xl font-semibold text-primary-foreground" data-testid="text-event-name">
-              {event?.name || "Event Ticket"}
+          <div className="p-6 text-center" style={{ backgroundColor: MATCHA_GREEN }}>
+            <Ticket className="h-8 w-8 text-white mx-auto mb-2" />
+            <h1 className="text-xl font-semibold text-white" data-testid="text-event-name">
+              {event?.displayName || event?.name || "Event Ticket"}
             </h1>
-            <p className="text-primary-foreground/80 text-sm mt-1">Matcha On Ice · San Diego, CA</p>
+            <p className="text-white/80 text-sm mt-1">Matcha On Ice · San Diego, CA</p>
           </div>
 
           <div className="p-6 space-y-5">
@@ -157,7 +159,8 @@ export default function TicketPage() {
                 <button
                   onClick={handleDownloadPDF}
                   disabled={downloading}
-                  className="flex items-center justify-center gap-2 bg-primary text-primary-foreground py-3 rounded-2xl font-medium text-sm shadow-soft hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-70"
+                  className="flex items-center justify-center gap-2 text-white py-3 rounded-2xl font-medium text-sm shadow-soft active:scale-95 transition-all disabled:opacity-70"
+                  style={{ backgroundColor: MATCHA_GREEN }}
                   data-testid="button-download-pdf"
                 >
                   <Download className="h-4 w-4" />

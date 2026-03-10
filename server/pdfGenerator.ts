@@ -10,13 +10,13 @@ export async function generateTicketPDF(ticket: Ticket, event: Event | undefined
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const purple = "#7c6af4";
+    const matchaGreen = "#94a779";
     const darkText = "#1a1a2e";
     const mutedText = "#6b7280";
-    const lightBg = "#f5f3ff";
+    const lightBg = "#f0f3eb";
     const pageWidth = doc.page.width - 80;
 
-    doc.rect(0, 0, doc.page.width, 80).fill(purple);
+    doc.rect(0, 0, doc.page.width, 80).fill(matchaGreen);
 
     doc.fontSize(22).fillColor("#ffffff").font("Helvetica-Bold")
       .text("MATCHA ON ICE", 40, 22, { align: "center", width: pageWidth });
@@ -52,7 +52,7 @@ export async function generateTicketPDF(ticket: Ticket, event: Event | undefined
     const badgeText = ticket.ticketType || "General";
     const badgeW = doc.widthOfString(badgeText) + 20;
     doc.roundedRect(badgeX, badgeY, badgeW, 22, 6).fill(lightBg);
-    doc.fontSize(10).fillColor(purple).font("Helvetica-Bold")
+    doc.fontSize(10).fillColor(matchaGreen).font("Helvetica-Bold")
       .text(badgeText, badgeX + 10, badgeY + 6);
     y += 36;
 

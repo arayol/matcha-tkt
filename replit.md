@@ -141,9 +141,16 @@ See `SETUP.md` for full setup instructions including database schema, environmen
 ## User Preferences
 - All app UI text, labels, and content must be in **English (US)**.
 
+## Production
+- Production URL: `https://matcha-rayol.replit.app`
+- Stripe webhook endpoint: `https://matcha-rayol.replit.app/api/stripe/webhook`
+- Gmail OAuth connection ID: `conn_google-mail_01KKCVV91TM3F8M0SGGVRS1HS1`
+- Email baseUrl resolves via: `APP_BASE_URL` env var → `WEB_REPL_RENEWAL` detection → `REPLIT_DEV_DOMAIN` → fallback localhost
+
 ## CSS Theme
 - Palette: lilac/blue/yellow soft (modern dashboard style)
 - Primary: purple (hsl 250 72% 64%)
+- Brand color: #94a779 (matcha green) — used in ticket page header, Download PDF button, PDF generator, and email template
 - Scanner accent: Primary purple (progress bar only retains matcha green #7a9956)
 - Cards: rounded-3xl, shadow-card, border-card-border
 - Sidebar: 88px, centered icons, rounded-[32px] (desktop only, hidden on mobile)

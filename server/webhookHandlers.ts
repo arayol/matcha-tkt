@@ -60,12 +60,15 @@ export class WebhookHandlers {
 
         console.log("\n🎫 Product:", product.name);
 
-        const namePattern = /^(.+?),\s*(.+?)\s*-\s*(.+?)\s*Event Ticket$/;
-        const match = product.name.match(namePattern);
-
         let eventDate = "TBD";
         let eventTime = "TBD";
         let eventType = "General";
+
+        const pattern1 = /^(.+?),\s*(.+?)\s*-\s*(.+?)\s*Event Ticket$/;
+        const pattern2 = /^(.+?),\s*(\d{1,2}\s*(?:AM|PM)\s*-\s*\d{1,2}\s*(?:AM|PM)),\s*(.+)$/i;
+        const pattern3 = /^(.+?),\s*(.+?),\s*(.+)$/;
+
+        const match = product.name.match(pattern1) || product.name.match(pattern2) || product.name.match(pattern3);
 
         if (match) {
           eventDate = match[1].trim();
@@ -92,6 +95,19 @@ export class WebhookHandlers {
           console.log("  📦 Event created in DB:", dbEvent.id);
         } else {
           console.log("  📦 Event found in DB:", dbEvent.id);
+        }
+
+        if (eventDate !== "TBD") {
+          try {
+            const existingNames = await storage.listEventDateNames();
+            const existing = existingNames.find(edn => edn.eventDate === eventDate);
+            if (!existing) {
+              await storage.upsertEventDateName({ eventDate, eventName: product.name });
+              console.log("  📅 Event date name registered:", eventDate, "→", product.name);
+            }
+          } catch (err) {
+            console.error("  ⚠️ Failed to register event date name:", err);
+          }
         }
 
         const quantity = item.quantity || 1;
