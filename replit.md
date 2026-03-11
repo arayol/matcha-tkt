@@ -3,8 +3,9 @@
 ## About
 Ticket management system for fitness events in San Diego, CA. Includes Stripe integration for automated sales, QR codes, unique ticket URLs, admin dashboard, courtesy ticket generation, Gmail OAuth email delivery, and CSV reconciliation with Hostinger store exports.
 
-## Status: M9 — CSV Reconciliation + Event Comparison
-- **CSV Import:** Admin-only page to upload Hostinger CSV exports, parse Product field, detect duplicates, store in separate `hostinger_orders` table
+## Status: M10 — Event Location + CSV Import Consolidation
+- **Event Location:** `event_date_names` table extended with `location_street`, `location_city`, `location_zip` — flows through ticket page, PDF, and email
+- **CSV Import:** Moved from standalone page into a dialog on the Reconciliation page (Import CSV button)
 - **Reconciliation:** Compare CSV orders against Stripe tickets, show divergences with badges, bulk/individual edit, export to CSV
 - **Event Comparison:** Comparative dashboard with charts (recharts) and tables showing tickets by type, revenue, vendors, occupancy across events
 - **Customer base:** Customers table built from CSV data (name, email, phone, address, events attended, ticket types) for future email campaigns
@@ -44,7 +45,7 @@ Ticket management system for fitness events in San Diego, CA. Includes Stripe in
 - `server/pdfGenerator.ts` — PDF ticket generation via pdfkit (with QR code embedded)
 - `server/emailService.ts` — Gmail OAuth email (CID logo, black header/footer, PDF attachment)
 - `server/matcha-logo.png` — Transparent-bg PNG logo (CID attachment in emails)
-- `shared/schema.ts` — Database schema (users, events, tickets, csv_uploads, hostinger_orders, customers)
+- `shared/schema.ts` — Database schema (users, events, tickets, csv_uploads, hostinger_orders, customers, event_date_names with location fields)
 - `client/src/components/AppLayout.tsx` — Shared layout with sidebar (desktop) + hamburger drawer (mobile)
 - `client/src/App.tsx` — Router with auth check, role-based route protection
 - `client/src/lib/auth.ts` — useAuth hook (login, logout, session check)
@@ -55,8 +56,7 @@ Ticket management system for fitness events in San Diego, CA. Includes Stripe in
 - `client/src/pages/CourtesyPage.tsx` — Mobile-optimized courtesy ticket form
 - `client/src/pages/AdminUsersPage.tsx` — User management (create, delete, role change)
 - `client/src/pages/ScannerPage.tsx` — PWA mobile scanner (3 tabs, dark mode, live stats)
-- `client/src/pages/CsvImportPage.tsx` — CSV upload, preview, import, history with revert
-- `client/src/pages/ReconciliationPage.tsx` — CSV × Stripe reconciliation with filters, badges, bulk actions
+- `client/src/pages/ReconciliationPage.tsx` — CSV × Stripe reconciliation with filters, badges, bulk actions, CSV import dialog, event names with location fields
 - `client/src/pages/EventComparisonPage.tsx` — Comparative dashboard with charts and tables
 - `client/public/manifest.json` — PWA manifest (start_url: /scan, standalone, portrait)
 - `client/public/sw.js` — Service worker for offline caching

@@ -278,7 +278,11 @@ export class DatabaseStorage implements IStorage {
   async upsertEventDateName(data: InsertEventDateName): Promise<EventDateName> {
     const existing = await db.select().from(eventDateNames).where(eq(eventDateNames.eventDate, data.eventDate));
     if (existing.length > 0) {
-      const [updated] = await db.update(eventDateNames).set({ eventName: data.eventName }).where(eq(eventDateNames.eventDate, data.eventDate)).returning();
+      const updateData: Record<string, any> = { eventName: data.eventName };
+      if (data.locationStreet !== undefined) updateData.locationStreet = data.locationStreet;
+      if (data.locationCity !== undefined) updateData.locationCity = data.locationCity;
+      if (data.locationZip !== undefined) updateData.locationZip = data.locationZip;
+      const [updated] = await db.update(eventDateNames).set(updateData).where(eq(eventDateNames.eventDate, data.eventDate)).returning();
       return updated;
     }
     const [created] = await db.insert(eventDateNames).values(data).returning();

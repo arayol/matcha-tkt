@@ -133,6 +133,9 @@ export const eventDateNames = pgTable("event_date_names", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   eventDate: text("event_date").notNull().unique(),
   eventName: text("event_name").notNull(),
+  locationStreet: text("location_street"),
+  locationCity: text("location_city"),
+  locationZip: text("location_zip"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

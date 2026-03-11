@@ -1,7 +1,11 @@
 import PDFDocument from "pdfkit";
 import type { Ticket, Event } from "@shared/schema";
 
-export async function generateTicketPDF(ticket: Ticket, event: Event | undefined): Promise<Buffer> {
+export async function generateTicketPDF(
+  ticket: Ticket,
+  event: Event | undefined,
+  locationData?: { locationStreet: string | null; locationCity: string | null; locationZip?: string | null },
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A5", margin: 40 });
     const chunks: Buffer[] = [];
@@ -16,13 +20,15 @@ export async function generateTicketPDF(ticket: Ticket, event: Event | undefined
     const lightBg = "#f0f3eb";
     const pageWidth = doc.page.width - 80;
 
+    const headerCity = locationData?.locationCity || "San Diego";
+
     doc.rect(0, 0, doc.page.width, 80).fill(matchaGreen);
 
     doc.fontSize(22).fillColor("#ffffff").font("Helvetica-Bold")
       .text("MATCHA ON ICE", 40, 22, { align: "center", width: pageWidth });
 
     doc.fontSize(10).fillColor("rgba(255,255,255,0.8)").font("Helvetica")
-      .text("San Diego, CA  ·  Event Ticket", 40, 50, { align: "center", width: pageWidth });
+      .text(`${headerCity}, CA  ·  Event Ticket`, 40, 50, { align: "center", width: pageWidth });
 
     let y = 100;
 
@@ -32,8 +38,11 @@ export async function generateTicketPDF(ticket: Ticket, event: Event | undefined
     y += 22;
 
     if (event) {
+      const locationLine = locationData?.locationStreet && locationData?.locationCity
+        ? `${locationData.locationStreet}, ${locationData.locationCity}${locationData.locationZip ? ` ${locationData.locationZip}` : ""}`
+        : event.location || "San Diego, CA";
       doc.fontSize(10).fillColor(mutedText).font("Helvetica")
-        .text(`${event.date}  ·  ${event.time}  ·  ${event.location}`, 40, y, { width: pageWidth });
+        .text(`${event.date}  ·  ${event.time}  ·  ${locationLine}`, 40, y, { width: pageWidth });
       y += 16;
     }
 
@@ -89,7 +98,7 @@ export async function generateTicketPDF(ticket: Ticket, event: Event | undefined
     y += 10;
 
     doc.fontSize(8).fillColor(mutedText).font("Helvetica")
-      .text("Matcha On Ice  ·  matchaonice.com", 40, y, { align: "center", width: pageWidth });
+      .text("matchaonice.com", 40, y, { align: "center", width: pageWidth });
 
     doc.end();
   });

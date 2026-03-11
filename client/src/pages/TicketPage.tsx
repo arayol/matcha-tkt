@@ -84,7 +84,7 @@ export default function TicketPage() {
             <h1 className="text-xl font-semibold text-white" data-testid="text-event-name">
               {event?.displayName || event?.name || "Event Ticket"}
             </h1>
-            <p className="text-white/80 text-sm mt-1">Matcha On Ice · San Diego, CA</p>
+            <p className="text-white/80 text-sm mt-1">Matcha On Ice · {event?.locationCity ? `${event.locationCity}, CA` : "San Diego, CA"}</p>
           </div>
 
           <div className="p-6 space-y-5">
@@ -135,7 +135,11 @@ export default function TicketPage() {
                   <div className="flex items-center gap-3 text-sm">
                     <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                     <span className="text-muted-foreground">Location</span>
-                    <span className="ml-auto font-medium" data-testid="text-event-location">{event.location}</span>
+                    <span className="ml-auto font-medium text-right" data-testid="text-event-location">
+                      {event.locationStreet && event.locationCity
+                        ? `${event.locationStreet}, ${event.locationCity}${event.locationZip ? ` ${event.locationZip}` : ""}`
+                        : event.location}
+                    </span>
                   </div>
                 </>
               )}
@@ -193,7 +197,7 @@ export default function TicketPage() {
         </div>
 
         <div className="text-center">
-          <p className="text-xs text-muted-foreground">Matcha On Ice &middot; San Diego, CA</p>
+          <p className="text-xs text-muted-foreground">Matcha On Ice &middot; {event?.locationCity ? `${event.locationCity}, CA` : "San Diego, CA"}</p>
         </div>
       </div>
     </div>

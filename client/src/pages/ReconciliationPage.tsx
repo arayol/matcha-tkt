@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   GitCompareArrows, AlertTriangle, CheckCircle2, XCircle,
   Download, Filter, Edit2, Check, X, Loader2, Calendar, Plus, Trash2, Send, MailCheck,
+  Upload, FileUp, FileSpreadsheet, RotateCcw,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -18,7 +19,10 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import type { EventDateName } from "@shared/schema";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import type { EventDateName, CsvUpload } from "@shared/schema";
 
 interface Divergence {
   id: string;
@@ -89,8 +93,17 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [editForm, setEditForm] = useState({ billingName: "", email: "", price: "", parsedTicketType: "" });
   const [newEventDate, setNewEventDate] = useState("");
   const [newEventName, setNewEventName] = useState("");
+  const [newLocationStreet, setNewLocationStreet] = useState("");
+  const [newLocationCity, setNewLocationCity] = useState("");
+  const [newLocationZip, setNewLocationZip] = useState("");
   const [showTicketDialog, setShowTicketDialog] = useState(false);
   const [ticketDialogIds, setTicketDialogIds] = useState<string[]>([]);
+  const [showCsvImport, setShowCsvImport] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvPreview, setCsvPreview] = useState<{ orderNumber: string; email: string; billingName: string; phone: string; product: string; price: string; subtotal: string; discountCode: string; quantity: string; status: string }[]>([]);
+  const [csvResult, setCsvResult] = useState<any>(null);
+  const [csvDragOver, setCsvDragOver] = useState(false);
+  const csvFileRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery<ReconciliationData>({
     queryKey: ["/api/admin/reconciliation"],
@@ -134,12 +147,15 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   });
 
   const saveEventNameMutation = useMutation({
-    mutationFn: (body: { eventDate: string; eventName: string }) =>
+    mutationFn: (body: { eventDate: string; eventName: string; locationStreet?: string; locationCity?: string; locationZip?: string }) =>
       apiRequest("POST", "/api/admin/event-date-names", body),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
       setNewEventDate("");
       setNewEventName("");
+      setNewLocationStreet("");
+      setNewLocationCity("");
+      setNewLocationZip("");
       toast({ title: "Event name saved" });
     },
     onError: () => toast({ title: "Failed to save event name", variant: "destructive" }),
@@ -220,6 +236,135 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
     editMutation.mutate({ id: editingId, data: editForm });
   };
 
+  const { data: csvUploads, isLoading: csvUploadsLoading } = useQuery<CsvUpload[]>({
+    queryKey: ["/api/admin/csv/uploads"],
+  });
+
+  const csvUploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/admin/csv/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || res.statusText);
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setCsvResult(data);
+      setCsvFile(null);
+      setCsvPreview([]);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/csv/uploads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/csv/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/reconciliation"] });
+      toast({
+        title: "CSV imported successfully",
+        description: `${data.imported} records imported${data.skipped > 0 ? `, ${data.skipped} duplicates skipped` : ""}`,
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Import failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const csvRevertMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("POST", `/api/admin/csv/uploads/${id}/revert`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/csv/uploads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/csv/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/reconciliation"] });
+      toast({ title: "Upload reverted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to revert upload", variant: "destructive" });
+    },
+  });
+
+  const parseCsvPreview = useCallback((text: string) => {
+    const parseCsvLine = (line: string): string[] => {
+      const fields: string[] = [];
+      let current = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuotes) {
+          if (ch === '"') {
+            if (i + 1 < line.length && line[i + 1] === '"') { current += '"'; i++; } else { inQuotes = false; }
+          } else { current += ch; }
+        } else {
+          if (ch === '"') { inQuotes = true; } else if (ch === ',') { fields.push(current.trim()); current = ""; } else { current += ch; }
+        }
+      }
+      fields.push(current.trim());
+      return fields;
+    };
+    const lines = text.split("\n").filter((l) => l.trim());
+    if (lines.length < 2) return [];
+    const headers = parseCsvLine(lines[0]);
+    const findCol = (names: string[]) => {
+      for (const name of names) { const idx = headers.findIndex((h) => h.toLowerCase() === name.toLowerCase()); if (idx !== -1) return idx; }
+      for (const name of names) { const idx = headers.findIndex((h) => h.toLowerCase().includes(name.toLowerCase())); if (idx !== -1) return idx; }
+      return -1;
+    };
+    const orderCol = findCol(["Order Number", "Order #", "Order"]);
+    const emailCol = findCol(["Email", "Billing Email"]);
+    const nameCol = findCol(["Billing Name", "Customer Name", "Name"]);
+    const phoneCol = findCol(["Billing Phone", "Phone"]);
+    const productCol = findCol(["Product Names", "Product Name", "Product"]);
+    const priceCol = findCol(["Price", "Unit Price"]);
+    const subtotalCol = findCol(["Subtotal", "Total", "Amount"]);
+    const discountCol = findCol(["Discount Amount", "Discount Code", "Discount", "Coupon"]);
+    const qtyCol = findCol(["Quantity", "Qty"]);
+    const statusCol = findCol(["Status", "Order Status"]);
+    const rows: typeof csvPreview = [];
+    const maxPreview = Math.min(lines.length, 21);
+    for (let i = 1; i < maxPreview; i++) {
+      const cols = parseCsvLine(lines[i]);
+      rows.push({
+        orderNumber: orderCol >= 0 ? cols[orderCol] || "" : "",
+        email: emailCol >= 0 ? cols[emailCol] || "" : "",
+        billingName: nameCol >= 0 ? cols[nameCol] || "" : "",
+        phone: phoneCol >= 0 ? cols[phoneCol] || "" : "",
+        product: productCol >= 0 ? cols[productCol] || "" : "",
+        price: priceCol >= 0 ? cols[priceCol] || "" : "",
+        subtotal: subtotalCol >= 0 ? cols[subtotalCol] || "" : "",
+        discountCode: discountCol >= 0 ? cols[discountCol] || "" : "",
+        quantity: qtyCol >= 0 ? cols[qtyCol] || "" : "",
+        status: statusCol >= 0 ? cols[statusCol] || "" : "",
+      });
+    }
+    return rows;
+  }, []);
+
+  const handleCsvFile = useCallback((file: File) => {
+    if (!file.name.endsWith(".csv")) {
+      toast({ title: "Please select a CSV file", variant: "destructive" });
+      return;
+    }
+    setCsvFile(file);
+    setCsvResult(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      setCsvPreview(parseCsvPreview(text));
+    };
+    reader.readAsText(file);
+  }, [parseCsvPreview, toast]);
+
+  const handleCsvDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setCsvDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleCsvFile(file);
+  }, [handleCsvFile]);
+
   return (
     <AppLayout dark={dark} toggleTheme={toggleTheme} onLogout={onLogout} user={user} activePath="/admin/reconciliation" data-testid="reconciliation-page">
       <div className="space-y-6">
@@ -228,10 +373,16 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
             <h1 className="text-3xl font-semibold tracking-tight" data-testid="text-page-title">Reconciliation</h1>
             <p className="text-sm text-muted-foreground mt-1">Compare CSV imports with Stripe records</p>
           </div>
-          <Button onClick={handleExport} variant="outline" data-testid="button-export">
-            <Download className="h-4 w-4 mr-2" />
-            Export CSV
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setShowCsvImport(true)} variant="outline" data-testid="button-import-csv">
+              <Upload className="h-4 w-4 mr-2" />
+              Import CSV
+            </Button>
+            <Button onClick={handleExport} variant="outline" data-testid="button-export">
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -319,65 +470,107 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-wrap items-end gap-3 mb-4">
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Event Date</label>
-                    <Select value={newEventDate} onValueChange={setNewEventDate}>
-                      <SelectTrigger className="w-[200px]" data-testid="select-event-date">
-                        <SelectValue placeholder="Select date..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(() => {
-                          const MONTH_ORDER: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
-                          const parseDateSort = (d: string) => {
-                            const m = d.match(/^(\w+)\s+(\d+)/i);
-                            if (!m) return 0;
-                            const month = MONTH_ORDER[m[1].toLowerCase().slice(0, 3)] ?? 0;
-                            const day = parseInt(m[2], 10) || 0;
-                            return month * 100 + day;
-                          };
-                          const allDates = new Set<string>();
-                          (csvOrders || []).forEach((o: any) => { if (o.parsedEventDate) allDates.add(o.parsedEventDate); });
-                          divergences.forEach(d => { if (d.eventDate) allDates.add(d.eventDate); });
-                          (eventsData || []).forEach((e: any) => { if (e.date && e.date !== "TBD") allDates.add(e.date); });
-                          const sorted = Array.from(allDates).sort((a, b) => parseDateSort(b) - parseDateSort(a));
-                          return sorted.map(date => (
-                            <SelectItem key={date} value={date}>{date}</SelectItem>
-                          ));
-                        })()}
-                      </SelectContent>
-                    </Select>
+                <div className="space-y-3 mb-4">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Event Date</label>
+                      <Select value={newEventDate} onValueChange={setNewEventDate}>
+                        <SelectTrigger className="w-[200px]" data-testid="select-event-date">
+                          <SelectValue placeholder="Select date..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(() => {
+                            const MONTH_ORDER: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+                            const parseDateSort = (d: string) => {
+                              const m = d.match(/^(\w+)\s+(\d+)/i);
+                              if (!m) return 0;
+                              const month = MONTH_ORDER[m[1].toLowerCase().slice(0, 3)] ?? 0;
+                              const day = parseInt(m[2], 10) || 0;
+                              return month * 100 + day;
+                            };
+                            const allDates = new Set<string>();
+                            (csvOrders || []).forEach((o: any) => { if (o.parsedEventDate) allDates.add(o.parsedEventDate); });
+                            divergences.forEach(d => { if (d.eventDate) allDates.add(d.eventDate); });
+                            (eventsData || []).forEach((e: any) => { if (e.date && e.date !== "TBD") allDates.add(e.date); });
+                            const sorted = Array.from(allDates).sort((a, b) => parseDateSort(b) - parseDateSort(a));
+                            return sorted.map(date => (
+                              <SelectItem key={date} value={date}>{date}</SelectItem>
+                            ));
+                          })()}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1 flex-1 min-w-[200px]">
+                      <label className="text-xs text-muted-foreground">Event Name</label>
+                      <Input
+                        placeholder="e.g. Matcha On Ice Valentine's Day"
+                        value={newEventName}
+                        onChange={(e) => setNewEventName(e.target.value)}
+                        data-testid="input-event-name"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1 flex-1 min-w-[200px]">
-                    <label className="text-xs text-muted-foreground">Event Name</label>
-                    <Input
-                      placeholder="e.g. Matcha On Ice Valentine's Day"
-                      value={newEventName}
-                      onChange={(e) => setNewEventName(e.target.value)}
-                      data-testid="input-event-name"
-                    />
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="space-y-1 flex-1 min-w-[160px]">
+                      <label className="text-xs text-muted-foreground">Street Address</label>
+                      <Input
+                        placeholder="e.g. 1234 Main St"
+                        value={newLocationStreet}
+                        onChange={(e) => setNewLocationStreet(e.target.value)}
+                        data-testid="input-location-street"
+                      />
+                    </div>
+                    <div className="space-y-1 min-w-[140px]">
+                      <label className="text-xs text-muted-foreground">City</label>
+                      <Input
+                        placeholder="e.g. San Diego"
+                        value={newLocationCity}
+                        onChange={(e) => setNewLocationCity(e.target.value)}
+                        data-testid="input-location-city"
+                      />
+                    </div>
+                    <div className="space-y-1 w-[100px]">
+                      <label className="text-xs text-muted-foreground">Zip Code</label>
+                      <Input
+                        placeholder="e.g. 92101"
+                        value={newLocationZip}
+                        onChange={(e) => setNewLocationZip(e.target.value)}
+                        data-testid="input-location-zip"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (newEventDate && newEventName.trim()) {
+                          saveEventNameMutation.mutate({
+                            eventDate: newEventDate,
+                            eventName: newEventName.trim(),
+                            locationStreet: newLocationStreet.trim() || undefined,
+                            locationCity: newLocationCity.trim() || undefined,
+                            locationZip: newLocationZip.trim() || undefined,
+                          });
+                        }
+                      }}
+                      disabled={!newEventDate || !newEventName.trim() || saveEventNameMutation.isPending}
+                      data-testid="button-save-event-name"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Save
+                    </Button>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      if (newEventDate && newEventName.trim()) {
-                        saveEventNameMutation.mutate({ eventDate: newEventDate, eventName: newEventName.trim() });
-                      }
-                    }}
-                    disabled={!newEventDate || !newEventName.trim() || saveEventNameMutation.isPending}
-                    data-testid="button-save-event-name"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Save
-                  </Button>
                 </div>
                 {eventDateNames && eventDateNames.length > 0 ? (
                   <div className="space-y-2">
                     {eventDateNames.map(edn => (
                       <div key={edn.id} className="flex items-center justify-between gap-3 p-2 rounded-md bg-muted/50" data-testid={`event-name-row-${edn.id}`}>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-wrap">
                           <Badge variant="outline" className="font-mono text-xs">{edn.eventDate}</Badge>
                           <span className="text-sm font-medium" data-testid={`text-event-name-${edn.id}`}>{edn.eventName}</span>
+                          {(edn.locationStreet || edn.locationCity) && (
+                            <span className="text-xs text-muted-foreground">
+                              📍 {[edn.locationStreet, edn.locationCity, edn.locationZip].filter(Boolean).join(", ")}
+                            </span>
+                          )}
                         </div>
                         <Button
                           size="icon"
@@ -584,7 +777,11 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
               </div>
             </Card>
 
-            <div className="md:hidden pb-4">
+            <div className="md:hidden pb-4 space-y-2">
+              <Button onClick={() => setShowCsvImport(true)} variant="outline" className="w-full" data-testid="button-import-csv-mobile">
+                <Upload className="h-4 w-4 mr-2" />
+                Import CSV
+              </Button>
               <Button onClick={handleExport} variant="outline" className="w-full" data-testid="button-export-mobile">
                 <Download className="h-4 w-4 mr-2" />
                 Export Divergences CSV
@@ -670,6 +867,198 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
               Send Tickets & Reconcile
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCsvImport} onOpenChange={(open) => { if (!open) { setShowCsvImport(false); setCsvFile(null); setCsvPreview([]); setCsvResult(null); } }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-csv-import">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="h-5 w-5" />
+              Import Hostinger CSV
+            </DialogTitle>
+            <DialogDescription>
+              Upload a CSV file exported from Hostinger to import orders for reconciliation
+            </DialogDescription>
+          </DialogHeader>
+
+          {csvResult && (
+            <div className="rounded-lg border p-4 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" data-testid="csv-import-result">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  <span className="font-medium text-sm">Import Complete</span>
+                </div>
+                <Button size="icon" variant="ghost" onClick={() => setCsvResult(null)} data-testid="button-dismiss-csv-result">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-2xl font-bold" data-testid="text-csv-imported">{csvResult.imported}</p>
+                  <p className="text-xs text-muted-foreground">Imported</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold" data-testid="text-csv-total">{csvResult.totalParsed}</p>
+                  <p className="text-xs text-muted-foreground">Total Parsed</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold" data-testid="text-csv-skipped">{csvResult.skipped}</p>
+                  <p className="text-xs text-muted-foreground">Skipped</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold truncate" data-testid="text-csv-file">{csvResult.upload?.fileName}</p>
+                  <p className="text-xs text-muted-foreground">File</p>
+                </div>
+              </div>
+              {csvResult.duplicatesInCsv?.length > 0 || csvResult.duplicatesInDb?.length > 0 ? (
+                <div className="mt-3 p-2 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                      {(csvResult.duplicatesInCsv?.length || 0) + (csvResult.duplicatesInDb?.length || 0)} duplicate(s) detected
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {[...(csvResult.duplicatesInCsv || []), ...(csvResult.duplicatesInDb || [])].slice(0, 10).map((dup: any, idx: number) => (
+                      <Badge key={`${dup.orderNumber}-${idx}`} variant="outline" className="text-xs">
+                        {dup.orderNumber} ({dup.existingSource})
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          <div
+            onDrop={handleCsvDrop}
+            onDragOver={(e) => { e.preventDefault(); setCsvDragOver(true); }}
+            onDragLeave={() => setCsvDragOver(false)}
+            onClick={() => csvFileRef.current?.click()}
+            className={`border-2 border-dashed rounded-md p-6 text-center cursor-pointer transition-colors ${
+              csvDragOver ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50"
+            }`}
+            data-testid="csv-dropzone"
+          >
+            <input
+              ref={csvFileRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => { const file = e.target.files?.[0]; if (file) handleCsvFile(file); e.target.value = ""; }}
+              data-testid="csv-file-input"
+            />
+            <FileUp className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
+            <p className="text-sm font-medium">{csvFile ? csvFile.name : "Drop a CSV file here or click to browse"}</p>
+            <p className="text-xs text-muted-foreground mt-1">Hostinger exported orders CSV format</p>
+          </div>
+
+          {csvFile && csvPreview.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium" data-testid="text-csv-preview-info">
+                    Preview: {csvPreview.length} rows {csvPreview.length === 20 ? "(first 20)" : ""}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => { setCsvFile(null); setCsvPreview([]); }} data-testid="button-csv-cancel">
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={() => { if (csvFile) csvUploadMutation.mutate(csvFile); }} disabled={csvUploadMutation.isPending} data-testid="button-csv-confirm">
+                    {csvUploadMutation.isPending ? (<><Loader2 className="h-4 w-4 mr-1 animate-spin" />Importing...</>) : (<><Upload className="h-4 w-4 mr-1" />Confirm Import</>)}
+                  </Button>
+                </div>
+              </div>
+              <div className="rounded-md border overflow-x-auto max-h-[300px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order #</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {csvPreview.map((row, idx) => (
+                      <TableRow key={idx} data-testid={`csv-preview-row-${idx}`}>
+                        <TableCell className="font-mono text-xs">{row.orderNumber}</TableCell>
+                        <TableCell className="text-xs">{row.email}</TableCell>
+                        <TableCell className="text-xs">{row.billingName}</TableCell>
+                        <TableCell className="text-xs max-w-[180px] truncate">{row.product}</TableCell>
+                        <TableCell className="text-xs">{row.price}</TableCell>
+                        <TableCell className="text-xs">{row.quantity}</TableCell>
+                        <TableCell><Badge variant="outline" className="text-xs">{row.status || "N/A"}</Badge></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Upload History</h4>
+            {csvUploadsLoading ? (
+              <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : !csvUploads || csvUploads.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center" data-testid="text-no-csv-uploads">No uploads yet</p>
+            ) : (
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>File</TableHead>
+                      <TableHead>Uploaded</TableHead>
+                      <TableHead>Records</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {csvUploads.map((upload) => (
+                      <TableRow key={upload.id} data-testid={`csv-upload-row-${upload.id}`}>
+                        <TableCell className="font-medium text-xs">{upload.fileName}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {upload.uploadedAt ? new Date(upload.uploadedAt).toLocaleString() : "N/A"}
+                        </TableCell>
+                        <TableCell className="text-xs">{upload.recordCount}</TableCell>
+                        <TableCell>
+                          <Badge variant={upload.status === "active" ? "default" : "secondary"} className="text-xs">
+                            {upload.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {upload.status === "active" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                if (confirm(`Revert "${upload.fileName}"? This deletes ${upload.recordCount} imported records.`)) {
+                                  csvRevertMutation.mutate(upload.id);
+                                }
+                              }}
+                              disabled={csvRevertMutation.isPending}
+                              data-testid={`button-csv-revert-${upload.id}`}
+                            >
+                              <RotateCcw className="h-3 w-3 mr-1" />
+                              Revert
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </AppLayout>

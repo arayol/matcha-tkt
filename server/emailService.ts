@@ -141,6 +141,9 @@ function buildTicketEmailHtml(params: {
   ticketType: string;
   ticketUrl: string;
   isCourtesy: boolean;
+  locationStreet?: string | null;
+  locationCity?: string | null;
+  locationZip?: string | null;
 }) {
   const baseUrl = process.env.APP_BASE_URL
     || (process.env.WEB_REPL_RENEWAL ? "https://matcha-rayol.replit.app" : null)
@@ -149,6 +152,10 @@ function buildTicketEmailHtml(params: {
 
   const fullTicketUrl = `${baseUrl}/ticket/${params.ticketUrl}`;
   const firstName = params.name.split(" ")[0];
+  const emailCity = params.locationCity || "San Diego";
+  const emailAddressLine = params.locationStreet && params.locationCity
+    ? `${params.locationStreet}, ${params.locationCity}${params.locationZip ? ` ${params.locationZip}` : ""}`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -514,6 +521,7 @@ function buildTicketEmailHtml(params: {
         <div class="ticket-card">
           <div class="ticket-header">
             <div class="event-title-ticket">${params.eventName}</div>
+            ${emailAddressLine ? `<div style="font-family:'Jost',sans-serif;font-size:13px;font-weight:300;color:rgba(255,255,255,0.55);margin-top:6px;letter-spacing:0.3px;">${emailAddressLine}</div>` : ""}
             <div class="ticket-type-badge">${params.ticketType}</div>
           </div>
 
@@ -528,7 +536,7 @@ function buildTicketEmailHtml(params: {
             </div>
             <div class="detail-col">
               <div class="detail-label">Location</div>
-              <div class="detail-value">${params.eventLocation}</div>
+              <div class="detail-value">${emailCity}, CA</div>
             </div>
           </div>
 
@@ -576,7 +584,7 @@ function buildTicketEmailHtml(params: {
         <tr><td class="footer" style="background-color:#352d17;">
           <div class="footer-divider"></div>
           <div class="footer-text">
-            Matcha On Ice &middot; San Diego, CA<br/>
+            Matcha On Ice &middot; ${emailCity}, CA<br/>
             <a href="mailto:contact@matchaonice.com">contact@matchaonice.com</a>
           </div>
         </td></tr>
@@ -601,7 +609,23 @@ export async function sendTicketEmail(params: {
     const senderEmail = getSenderEmail();
     const fromHeader = `Matcha On Ice <${senderEmail}>`;
 
-    const pdfBuffer = await generateTicketPDF(ticket, event);
+    let locationStreet: string | null = null;
+    let locationCity: string | null = null;
+    let locationZip: string | null = null;
+    if (event?.date && event.date !== "TBD") {
+      try {
+        const { storage } = await import("./storage");
+        const eventDateNames = await storage.listEventDateNames();
+        const mapping = eventDateNames.find((edn: any) => edn.eventDate === event.date);
+        if (mapping) {
+          locationStreet = mapping.locationStreet;
+          locationCity = mapping.locationCity;
+          locationZip = mapping.locationZip;
+        }
+      } catch {}
+    }
+
+    const pdfBuffer = await generateTicketPDF(ticket, event, { locationStreet, locationCity, locationZip });
     const pdfFilename = `ticket-${ticket.ticketUrl}.pdf`;
 
     const htmlBody = buildTicketEmailHtml({
@@ -613,6 +637,9 @@ export async function sendTicketEmail(params: {
       ticketType: ticket.ticketType || "General",
       ticketUrl: ticket.ticketUrl,
       isCourtesy,
+      locationStreet,
+      locationCity,
+      locationZip,
     });
 
     const rawMessage = makeRfc2822({

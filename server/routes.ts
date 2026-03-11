@@ -106,13 +106,21 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const event = await storage.getEvent(ticket.eventId);
 
       let displayName = event?.name;
+      let locationStreet: string | null = null;
+      let locationCity: string | null = null;
+      let locationZip: string | null = null;
       if (event?.date && event.date !== "TBD") {
         const eventDateNames = await storage.listEventDateNames();
         const mapping = eventDateNames.find(edn => edn.eventDate === event.date);
-        if (mapping) displayName = mapping.eventName;
+        if (mapping) {
+          displayName = mapping.eventName;
+          locationStreet = mapping.locationStreet;
+          locationCity = mapping.locationCity;
+          locationZip = mapping.locationZip;
+        }
       }
 
-      res.json({ ticket, event: event ? { ...event, displayName } : event });
+      res.json({ ticket, event: event ? { ...event, displayName, locationStreet, locationCity, locationZip } : event });
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch ticket" });
     }
@@ -223,13 +231,21 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const event = ticket.eventId ? await storage.getEvent(ticket.eventId) : undefined;
 
       let resolvedEvent = event;
+      let locationStreet: string | null = null;
+      let locationCity: string | null = null;
+      let locationZip: string | null = null;
       if (event?.date && event.date !== "TBD") {
         const eventDateNames = await storage.listEventDateNames();
         const mapping = eventDateNames.find(edn => edn.eventDate === event.date);
-        if (mapping) resolvedEvent = { ...event, name: mapping.eventName };
+        if (mapping) {
+          resolvedEvent = { ...event, name: mapping.eventName };
+          locationStreet = mapping.locationStreet;
+          locationCity = mapping.locationCity;
+          locationZip = mapping.locationZip;
+        }
       }
 
-      const pdfBuffer = await generateTicketPDF(ticket, resolvedEvent);
+      const pdfBuffer = await generateTicketPDF(ticket, resolvedEvent, { locationStreet, locationCity, locationZip });
 
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="ticket-${req.params.urlSlug}.pdf"`);
@@ -965,11 +981,17 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/admin/event-date-names", requireAdmin, async (req, res) => {
     try {
-      const { eventDate, eventName } = req.body;
+      const { eventDate, eventName, locationStreet, locationCity, locationZip } = req.body;
       if (!eventDate || !eventName) {
         return res.status(400).json({ error: "eventDate and eventName are required" });
       }
-      const result = await storage.upsertEventDateName({ eventDate, eventName });
+      const result = await storage.upsertEventDateName({
+        eventDate,
+        eventName,
+        locationStreet: locationStreet || null,
+        locationCity: locationCity || null,
+        locationZip: locationZip || null,
+      });
       res.json(result);
     } catch (err) {
       res.status(500).json({ error: "Failed to save event date name" });
