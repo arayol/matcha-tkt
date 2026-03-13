@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  BarChart3, Users, Ticket, DollarSign, TrendingUp,
-  Table2, BarChart, Clock, Layers,
+  Users, Ticket, DollarSign, TrendingUp,
+  Table2, BarChart, Clock, Layers, Check, X,
 } from "lucide-react";
 import {
   BarChart as RechartsBarChart,
@@ -19,7 +19,11 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import AppLayout from "@/components/AppLayout";
 
 interface EventComparison {
@@ -54,6 +58,8 @@ type ViewMode = "charts" | "table";
 export default function EventComparisonPage({ dark, toggleTheme, onLogout, user }: EventComparisonPageProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("charts");
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterMonth, setFilterMonth] = useState<string>("all");
 
   const { data: comparison, isLoading } = useQuery<EventComparison[]>({
     queryKey: ["/api/admin/events/comparison"],
@@ -63,6 +69,17 @@ export default function EventComparisonPage({ dark, toggleTheme, onLogout, user 
   const displayEvents = selectedEvents.length > 0
     ? events.filter(e => selectedEvents.includes(e.eventId))
     : events;
+
+  const MONTH_ORDER = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const availableMonths = [...new Set(events.map(e => e.eventDate.split(" ")[0]))].sort(
+    (a, b) => MONTH_ORDER.indexOf(a) - MONTH_ORDER.indexOf(b)
+  );
+  const filteredEvents = events.filter(e => {
+    const monthMatch = filterMonth === "all" || e.eventDate.startsWith(filterMonth);
+    const q = searchQuery.toLowerCase();
+    const searchMatch = !q || e.eventName.toLowerCase().includes(q) || e.eventType.toLowerCase().includes(q) || e.eventDate.toLowerCase().includes(q);
+    return monthMatch && searchMatch;
+  });
 
   const toggleEvent = (eventId: string) => {
     setSelectedEvents(prev =>
@@ -172,28 +189,80 @@ export default function EventComparisonPage({ dark, toggleTheme, onLogout, user 
             </div>
 
             {events.length > 1 && (
-              <Card className="p-4 md:p-5">
+              <Card className="p-4 md:p-5" data-testid="card-event-picker">
                 <p className="text-sm font-medium mb-3">Select events to compare</p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant={selectedEvents.length === 0 ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setSelectedEvents([])}
-                    data-testid="button-select-all-events"
-                  >
-                    All Events
-                  </Button>
-                  {events.map(e => (
-                    <Button
-                      key={e.eventId}
-                      variant={selectedEvents.includes(e.eventId) ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => toggleEvent(e.eventId)}
-                      data-testid={`button-select-event-${e.eventId}`}
-                    >
-                      {e.eventName}
-                    </Button>
-                  ))}
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Search event or type..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="flex-1"
+                      data-testid="input-event-search"
+                    />
+                    <Select value={filterMonth} onValueChange={setFilterMonth}>
+                      <SelectTrigger className="w-[148px]" data-testid="select-month-filter">
+                        <SelectValue placeholder="All months" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All months</SelectItem>
+                        {availableMonths.map(m => (
+                          <SelectItem key={m} value={m}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {filteredEvents.length} event{filteredEvents.length !== 1 ? "s" : ""} — click to select
+                  </div>
+                  <div className="rounded-md border divide-y max-h-64 overflow-y-auto" data-testid="list-events">
+                    {filteredEvents.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">No events match your search</p>
+                    ) : (
+                      filteredEvents.map(e => {
+                        const selected = selectedEvents.includes(e.eventId);
+                        return (
+                          <div
+                            key={e.eventId}
+                            className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors ${selected ? "bg-primary/5" : ""}`}
+                            onClick={() => toggleEvent(e.eventId)}
+                            data-testid={`row-select-event-${e.eventId}`}
+                          >
+                            <div className={`h-4 w-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${selected ? "bg-primary border-primary" : "border-border"}`}>
+                              {selected && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                            </div>
+                            <span className="text-sm flex-1 truncate">{e.eventName}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">{e.eventDate} · {e.eventTime}</span>
+                            <Badge variant="outline" className="text-xs shrink-0">{e.eventType}</Badge>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  {selectedEvents.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+                      <span className="text-xs text-muted-foreground">{selectedEvents.length} selected:</span>
+                      {selectedEvents.map(id => {
+                        const ev = events.find(e => e.eventId === id);
+                        if (!ev) return null;
+                        return (
+                          <Badge key={id} variant="secondary" className="gap-1 pr-1.5 max-w-[220px]">
+                            <span className="text-xs truncate">{ev.eventDate} · {ev.eventName.length > 25 ? ev.eventName.slice(0, 25) + "…" : ev.eventName}</span>
+                            <button
+                              className="ml-0.5 rounded-sm opacity-60 hover:opacity-100 flex-shrink-0"
+                              onClick={() => toggleEvent(id)}
+                              data-testid={`button-remove-selected-${id}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                      <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setSelectedEvents([])} data-testid="button-clear-all-selected">
+                        Clear all
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </Card>
             )}

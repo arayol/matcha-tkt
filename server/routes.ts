@@ -998,6 +998,23 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  app.patch("/api/admin/event-date-names/:id", requireAdmin, async (req, res) => {
+    try {
+      const { eventName, locationStreet, locationCity, locationZip, archived } = req.body;
+      const data: Record<string, any> = {};
+      if (eventName !== undefined) data.eventName = eventName;
+      if (locationStreet !== undefined) data.locationStreet = locationStreet || null;
+      if (locationCity !== undefined) data.locationCity = locationCity || null;
+      if (locationZip !== undefined) data.locationZip = locationZip || null;
+      if (archived !== undefined) data.archived = archived;
+      const updated = await storage.updateEventDateName(req.params.id, data);
+      if (!updated) return res.status(404).json({ error: "Not found" });
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update event date name" });
+    }
+  });
+
   app.delete("/api/admin/event-date-names/:id", requireAdmin, async (req, res) => {
     try {
       const deleted = await storage.deleteEventDateName(req.params.id);

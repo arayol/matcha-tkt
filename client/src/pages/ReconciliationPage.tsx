@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   GitCompareArrows, AlertTriangle, CheckCircle2, XCircle,
   Download, Filter, Edit2, Check, X, Loader2, Calendar, Plus, Trash2, Send, MailCheck,
-  Upload, FileUp, FileSpreadsheet, RotateCcw,
+  Upload, FileUp, FileSpreadsheet, RotateCcw, Archive,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -97,6 +97,9 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [newLocationCity, setNewLocationCity] = useState("");
   const [newLocationZip, setNewLocationZip] = useState("");
   const [showTicketDialog, setShowTicketDialog] = useState(false);
+  const [editingEdnId, setEditingEdnId] = useState<string | null>(null);
+  const [editEdnForm, setEditEdnForm] = useState({ eventName: "", locationStreet: "", locationCity: "", locationZip: "" });
+  const [showArchivedEdns, setShowArchivedEdns] = useState(false);
   const [ticketDialogIds, setTicketDialogIds] = useState<string[]>([]);
   const [showCsvImport, setShowCsvImport] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -168,6 +171,17 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       toast({ title: "Event name removed" });
     },
     onError: () => toast({ title: "Failed to remove event name", variant: "destructive" }),
+  });
+
+  const updateEventNameMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, any> }) =>
+      apiRequest("PATCH", `/api/admin/event-date-names/${id}`, data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
+      setEditingEdnId(null);
+      toast({ title: "Event updated" });
+    },
+    onError: () => toast({ title: "Failed to update event", variant: "destructive" }),
   });
 
   const generateTicketsMutation = useMutation({
@@ -559,35 +573,151 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                     </Button>
                   </div>
                 </div>
-                {eventDateNames && eventDateNames.length > 0 ? (
+                {eventDateNames && eventDateNames.some(e => !e.archived) ? (
                   <div className="space-y-2">
-                    {eventDateNames.map(edn => (
-                      <div key={edn.id} className="flex items-center justify-between gap-3 p-2 rounded-md bg-muted/50" data-testid={`event-name-row-${edn.id}`}>
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <Badge variant="outline" className="font-mono text-xs">{edn.eventDate}</Badge>
-                          <span className="text-sm font-medium" data-testid={`text-event-name-${edn.id}`}>{edn.eventName}</span>
-                          {(edn.locationStreet || edn.locationCity) && (
-                            <span className="text-xs text-muted-foreground">
-                              📍 {[edn.locationStreet, edn.locationCity, edn.locationZip].filter(Boolean).join(", ")}
-                            </span>
-                          )}
-                        </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => deleteEventNameMutation.mutate(edn.id)}
-                          disabled={deleteEventNameMutation.isPending}
-                          data-testid={`button-delete-event-name-${edn.id}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
+                    {eventDateNames.filter(e => !e.archived).map(edn => (
+                      <div key={edn.id} data-testid={`event-name-row-${edn.id}`}>
+                        {editingEdnId === edn.id ? (
+                          <div className="p-2 rounded-md bg-muted/50 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="font-mono text-xs shrink-0">{edn.eventDate}</Badge>
+                              <Input
+                                className="h-7 text-sm"
+                                value={editEdnForm.eventName}
+                                onChange={e => setEditEdnForm(f => ({ ...f, eventName: e.target.value }))}
+                                placeholder="Event name"
+                                data-testid="input-edit-edn-name"
+                              />
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              <Input className="h-7 text-xs" placeholder="Street address" value={editEdnForm.locationStreet} onChange={e => setEditEdnForm(f => ({ ...f, locationStreet: e.target.value }))} data-testid="input-edit-edn-street" />
+                              <Input className="h-7 text-xs" placeholder="City" value={editEdnForm.locationCity} onChange={e => setEditEdnForm(f => ({ ...f, locationCity: e.target.value }))} data-testid="input-edit-edn-city" />
+                              <Input className="h-7 text-xs" placeholder="ZIP" value={editEdnForm.locationZip} onChange={e => setEditEdnForm(f => ({ ...f, locationZip: e.target.value }))} data-testid="input-edit-edn-zip" />
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                              <Button size="sm" variant="ghost" onClick={() => setEditingEdnId(null)} data-testid="button-cancel-edit-edn">
+                                <X className="h-3.5 w-3.5 mr-1" />Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => updateEventNameMutation.mutate({ id: edn.id, data: { eventName: editEdnForm.eventName, locationStreet: editEdnForm.locationStreet || null, locationCity: editEdnForm.locationCity || null, locationZip: editEdnForm.locationZip || null } })}
+                                disabled={!editEdnForm.eventName.trim() || updateEventNameMutation.isPending}
+                                data-testid="button-save-edit-edn"
+                              >
+                                <Check className="h-3.5 w-3.5 mr-1" />Save
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-3 p-2 rounded-md bg-muted/50">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <Badge variant="outline" className="font-mono text-xs">{edn.eventDate}</Badge>
+                              <span className="text-sm font-medium" data-testid={`text-event-name-${edn.id}`}>{edn.eventName}</span>
+                              {(edn.locationStreet || edn.locationCity) && (
+                                <span className="text-xs text-muted-foreground">
+                                  📍 {[edn.locationStreet, edn.locationCity, edn.locationZip].filter(Boolean).join(", ")}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-0.5">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => { setEditingEdnId(edn.id); setEditEdnForm({ eventName: edn.eventName, locationStreet: edn.locationStreet || "", locationCity: edn.locationCity || "", locationZip: edn.locationZip || "" }); }}
+                                data-testid={`button-edit-event-name-${edn.id}`}
+                              >
+                                <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => updateEventNameMutation.mutate({ id: edn.id, data: { archived: true } })}
+                                disabled={updateEventNameMutation.isPending}
+                                data-testid={`button-archive-event-name-${edn.id}`}
+                              >
+                                <Archive className="h-3.5 w-3.5 text-muted-foreground" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => deleteEventNameMutation.mutate(edn.id)}
+                                disabled={deleteEventNameMutation.isPending}
+                                data-testid={`button-delete-event-name-${edn.id}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
+                    {eventDateNames.some(e => e.archived) && (
+                      <div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs text-muted-foreground w-full mt-1"
+                          onClick={() => setShowArchivedEdns(v => !v)}
+                          data-testid="button-toggle-archived-edns"
+                        >
+                          {showArchivedEdns ? "Hide" : "Show"} archived ({eventDateNames.filter(e => e.archived).length})
+                        </Button>
+                        {showArchivedEdns && (
+                          <div className="space-y-2 mt-2">
+                            {eventDateNames.filter(e => e.archived).map(edn => (
+                              <div key={edn.id} className="flex items-center justify-between gap-3 p-2 rounded-md bg-muted/30 opacity-60" data-testid={`event-name-row-archived-${edn.id}`}>
+                                <div className="flex items-center gap-3 flex-wrap">
+                                  <Badge variant="outline" className="font-mono text-xs">{edn.eventDate}</Badge>
+                                  <span className="text-sm">{edn.eventName}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => updateEventNameMutation.mutate({ id: edn.id, data: { archived: false } })} data-testid={`button-restore-event-name-${edn.id}`}>
+                                    Restore
+                                  </Button>
+                                  <Button size="icon" variant="ghost" onClick={() => deleteEventNameMutation.mutate(edn.id)} disabled={deleteEventNameMutation.isPending} data-testid={`button-delete-archived-edn-${edn.id}`}>
+                                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground" data-testid="text-no-event-names">
-                    No event names assigned yet. Select a date and type a name to get started.
-                  </p>
+                  <div>
+                    <p className="text-xs text-muted-foreground" data-testid="text-no-event-names">
+                      No event names assigned yet. Select a date and type a name to get started.
+                    </p>
+                    {eventDateNames && eventDateNames.some(e => e.archived) && (
+                      <div className="mt-2">
+                        <Button variant="ghost" size="sm" className="text-xs text-muted-foreground w-full" onClick={() => setShowArchivedEdns(v => !v)} data-testid="button-toggle-archived-edns">
+                          {showArchivedEdns ? "Hide" : "Show"} archived ({eventDateNames.filter(e => e.archived).length})
+                        </Button>
+                        {showArchivedEdns && (
+                          <div className="space-y-2 mt-2">
+                            {eventDateNames.filter(e => e.archived).map(edn => (
+                              <div key={edn.id} className="flex items-center justify-between gap-3 p-2 rounded-md bg-muted/30 opacity-60" data-testid={`event-name-row-archived-${edn.id}`}>
+                                <div className="flex items-center gap-3 flex-wrap">
+                                  <Badge variant="outline" className="font-mono text-xs">{edn.eventDate}</Badge>
+                                  <span className="text-sm">{edn.eventName}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => updateEventNameMutation.mutate({ id: edn.id, data: { archived: false } })} data-testid={`button-restore-event-name-${edn.id}`}>
+                                    Restore
+                                  </Button>
+                                  <Button size="icon" variant="ghost" onClick={() => deleteEventNameMutation.mutate(edn.id)} disabled={deleteEventNameMutation.isPending} data-testid={`button-delete-archived-edn-${edn.id}`}>
+                                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>

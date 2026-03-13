@@ -136,6 +136,7 @@ export const eventDateNames = pgTable("event_date_names", {
   locationStreet: text("location_street"),
   locationCity: text("location_city"),
   locationZip: text("location_zip"),
+  archived: boolean("archived").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
