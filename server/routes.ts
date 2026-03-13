@@ -971,6 +971,38 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  app.post("/api/admin/send-test-email", requireAdmin, async (req, res) => {
+    try {
+      const { to } = req.body;
+      const { sendTicketEmail } = await import("./emailService");
+      const mockTicket = {
+        id: "test-ticket-preview-001",
+        eventId: "evt-preview",
+        purchaserName: "Alexandra Rayol",
+        purchaserEmail: to || "arayol@gmail.com",
+        ticketType: "GA Ticket Access",
+        stripeSessionId: "cs_test_preview",
+        qrCode: "",
+        qrData: "PREVIEW-001",
+        ticketUrl: "preview-001",
+        status: "valid",
+        createdAt: new Date(),
+      };
+      const mockEvent = {
+        id: "evt-preview",
+        name: "Matcha On Ice Social",
+        date: "Apr 5th",
+        time: "11 AM - 1 PM",
+        location: "San Diego, CA",
+      };
+      const ok = await sendTicketEmail({ ticket: mockTicket, event: mockEvent });
+      if (ok) res.json({ sent: true, to: mockTicket.purchaserEmail });
+      else res.status(500).json({ error: "Email send failed — check server logs" });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Unknown error" });
+    }
+  });
+
   app.post("/api/admin/customers/recover-from-stripe", requireAdmin, async (_req, res) => {
     try {
       const stripe = await getUncachableStripeClient();
