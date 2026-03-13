@@ -53,7 +53,7 @@ export interface IStorage {
   updateTicketReconciliationStatus(id: string, status: string): Promise<Ticket | undefined>;
   getAllOrderNumbers(): Promise<Set<string>>;
 
-  createOrUpdateCustomer(data: InsertCustomer): Promise<Customer>;
+  createOrUpdateCustomer(data: InsertCustomer, overwrite?: boolean): Promise<Customer>;
   getCustomerByEmail(email: string): Promise<Customer | undefined>;
   listCustomers(): Promise<Customer[]>;
 
@@ -234,26 +234,24 @@ export class DatabaseStorage implements IStorage {
     return new Set(orders.map(o => o.orderNumber));
   }
 
-  async createOrUpdateCustomer(data: InsertCustomer): Promise<Customer> {
+  async createOrUpdateCustomer(data: InsertCustomer, overwrite = false): Promise<Customer> {
     const existing = await this.getCustomerByEmail(data.email);
     if (existing) {
       const updateData: Partial<Customer> = { updatedAt: new Date() };
-      if (data.name && !existing.name) updateData.name = data.name;
-      if (data.phone && !existing.phone) updateData.phone = data.phone;
-      if (data.streetAddress && !existing.streetAddress) updateData.streetAddress = data.streetAddress;
-      if (data.city && !existing.city) updateData.city = data.city;
-      if (data.state && !existing.state) updateData.state = data.state;
-      if (data.postal && !existing.postal) updateData.postal = data.postal;
+      if (data.name) updateData.name = overwrite ? data.name : (existing.name || data.name);
+      if (data.phone) updateData.phone = overwrite ? data.phone : (existing.phone || data.phone);
+      if (data.streetAddress) updateData.streetAddress = overwrite ? data.streetAddress : (existing.streetAddress || data.streetAddress);
+      if (data.city) updateData.city = overwrite ? data.city : (existing.city || data.city);
+      if (data.state) updateData.state = overwrite ? data.state : (existing.state || data.state);
+      if (data.postal) updateData.postal = overwrite ? data.postal : (existing.postal || data.postal);
 
       const newEvents = data.eventsAttended || [];
       const existingEvents = existing.eventsAttended || [];
-      const mergedEvents = [...new Set([...existingEvents, ...newEvents])];
-      updateData.eventsAttended = mergedEvents;
+      updateData.eventsAttended = [...new Set([...existingEvents, ...newEvents])];
 
       const newTypes = data.ticketTypes || [];
       const existingTypes = existing.ticketTypes || [];
-      const mergedTypes = [...new Set([...existingTypes, ...newTypes])];
-      updateData.ticketTypes = mergedTypes;
+      updateData.ticketTypes = [...new Set([...existingTypes, ...newTypes])];
 
       const [updated] = await db.update(customers).set(updateData).where(eq(customers.id, existing.id)).returning();
       return updated;

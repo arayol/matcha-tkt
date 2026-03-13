@@ -32,6 +32,8 @@ export class WebhookHandlers {
 
     const customerName = session.customer_details?.name || "Guest";
     const customerEmail = session.customer_details?.email || "unknown@example.com";
+    const customerPhone = session.customer_details?.phone || null;
+    const customerAddress = session.customer_details?.address || null;
     const paymentIntent = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id;
 
     console.log("📧 Customer:", customerName, "|", customerEmail);
@@ -53,6 +55,9 @@ export class WebhookHandlers {
         console.log(`⚠️ Tickets already exist for session ${session.id} (idempotency check). Skipping.`);
         return;
       }
+
+      const sessionEventsAttended: string[] = [];
+      const sessionTicketTypes: string[] = [];
 
       for (const item of expandedSession.line_items.data) {
         const product = item.price?.product as Stripe.Product | undefined;
@@ -110,6 +115,9 @@ export class WebhookHandlers {
           }
         }
 
+        sessionEventsAttended.push(eventDate);
+        sessionTicketTypes.push(eventType);
+
         const quantity = item.quantity || 1;
         for (let i = 0; i < quantity; i++) {
           const ticketId = crypto.randomUUID();
@@ -136,6 +144,23 @@ export class WebhookHandlers {
             console.error("  ⚠️ Email send failed (non-blocking):", err)
           );
         }
+      }
+
+      try {
+        await storage.createOrUpdateCustomer({
+          name: customerName,
+          email: customerEmail,
+          phone: customerPhone,
+          streetAddress: customerAddress?.line1 || null,
+          city: customerAddress?.city || null,
+          state: customerAddress?.state || null,
+          postal: customerAddress?.postal_code || null,
+          eventsAttended: [...new Set(sessionEventsAttended)],
+          ticketTypes: [...new Set(sessionTicketTypes)],
+        }, true);
+        console.log(`  👤 Customer saved: ${customerEmail}`);
+      } catch (err) {
+        console.error("  ⚠️ Failed to save customer (non-blocking):", err);
       }
 
       console.log("\n" + "=".repeat(60));

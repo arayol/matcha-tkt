@@ -9,6 +9,7 @@ import { generateTicketPDF } from "./pdfGenerator";
 import { sendTicketEmail } from "./emailService";
 import { insertTicketSchema } from "@shared/schema";
 import { parseCsvContent, checkDatabaseDuplicates } from "./csvParser";
+import { getUncachableStripeClient } from "./stripeClient";
 import { z } from "zod";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -967,6 +968,60 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (err) {
       console.error("Event comparison error:", err);
       res.status(500).json({ error: "Failed to generate event comparison" });
+    }
+  });
+
+  app.post("/api/admin/customers/recover-from-stripe", requireAdmin, async (_req, res) => {
+    try {
+      const stripe = await getUncachableStripeClient();
+      const allTickets = await storage.listTickets();
+      const allEvents = await storage.listEvents();
+      const eventMap = new Map(allEvents.map(e => [e.id, e]));
+
+      const sessionMap = new Map<string, { eventDates: string[]; ticketTypes: string[] }>();
+      for (const ticket of allTickets) {
+        if (!ticket.stripeSessionId) continue;
+        if (!sessionMap.has(ticket.stripeSessionId)) {
+          sessionMap.set(ticket.stripeSessionId, { eventDates: [], ticketTypes: [] });
+        }
+        const entry = sessionMap.get(ticket.stripeSessionId)!;
+        const ev = eventMap.get(ticket.eventId);
+        if (ev?.date && !entry.eventDates.includes(ev.date)) entry.eventDates.push(ev.date);
+        if (ticket.ticketType && !entry.ticketTypes.includes(ticket.ticketType)) entry.ticketTypes.push(ticket.ticketType);
+      }
+
+      let recovered = 0;
+      let failed = 0;
+
+      for (const [sessionId, meta] of sessionMap) {
+        try {
+          const session = await stripe.checkout.sessions.retrieve(sessionId);
+          const details = session.customer_details;
+          if (!details?.email) { failed++; continue; }
+
+          await storage.createOrUpdateCustomer({
+            name: details.name || details.email,
+            email: details.email,
+            phone: details.phone || null,
+            streetAddress: details.address?.line1 || null,
+            city: details.address?.city || null,
+            state: details.address?.state || null,
+            postal: details.address?.postal_code || null,
+            eventsAttended: meta.eventDates,
+            ticketTypes: meta.ticketTypes,
+          }, true);
+          recovered++;
+          console.log(`  ✅ Recovered: ${details.email}`);
+        } catch (err) {
+          console.error(`  ❌ Failed session ${sessionId}:`, err);
+          failed++;
+        }
+      }
+
+      res.json({ recovered, failed, total: sessionMap.size });
+    } catch (err) {
+      console.error("Customer recovery error:", err);
+      res.status(500).json({ error: "Recovery failed" });
     }
   });
 
