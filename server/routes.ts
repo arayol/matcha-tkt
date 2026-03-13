@@ -1012,6 +1012,67 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  app.post("/api/admin/migrate/event-model", requireAdmin, async (_req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { events: eventsTable, tickets: ticketsTable } = await import("@shared/schema");
+      const { eq, inArray } = await import("drizzle-orm");
+
+      const log: string[] = [];
+
+      // Step 1: Rename the OC | Mar 28th event to just its date
+      const allEvents = await storage.listEvents();
+      for (const ev of allEvents) {
+        if (ev.name !== ev.date && ev.date !== "TBD") {
+          await db.update(eventsTable).set({ name: ev.date, time: null }).where(eq(eventsTable.id, ev.id));
+          log.push(`Renamed event "${ev.name}" → "${ev.date}"`);
+        }
+      }
+
+      // Step 2: Merge duplicate events with same date (keep first, move tickets to it)
+      const eventsByDate = new Map<string, typeof allEvents[0][]>();
+      for (const ev of allEvents) {
+        const list = eventsByDate.get(ev.date) || [];
+        list.push(ev);
+        eventsByDate.set(ev.date, list);
+      }
+      for (const [date, group] of eventsByDate) {
+        if (group.length <= 1) continue;
+        const [keep, ...dupes] = group;
+        const dupeIds = dupes.map(d => d.id);
+        await db.update(ticketsTable).set({ eventId: keep.id }).where(inArray(ticketsTable.eventId, dupeIds));
+        for (const dupe of dupes) {
+          await db.delete(eventsTable).where(eq(eventsTable.id, dupe.id));
+          log.push(`Merged event "${dupe.date}" (${dupe.id.slice(0, 8)}) → kept ${keep.id.slice(0, 8)}`);
+        }
+      }
+
+      // Step 3: Backfill ticketTime for existing tickets from their ticketType / event names
+      const timeMap: Record<string, string> = {
+        "GA Ticket Access":                  "11 AM - 1PM",
+        "Fever Pilates Class: Austen":        "11 AM",
+        "Fever Pilates Class: Grazella":      "12:30 PM",
+        "Mat Pilates Class with Lauren":      "10 AM",
+        "Sculpt Class with Bray":             "12 PM",
+      };
+      const allTickets = await storage.listTickets();
+      let backfilled = 0;
+      for (const ticket of allTickets) {
+        if (!ticket.ticketTime && timeMap[ticket.ticketType]) {
+          await db.update(ticketsTable)
+            .set({ ticketTime: timeMap[ticket.ticketType] })
+            .where(eq(ticketsTable.id, ticket.id));
+          backfilled++;
+        }
+      }
+      log.push(`Backfilled ticketTime for ${backfilled} tickets`);
+
+      res.json({ ok: true, log });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Migration failed" });
+    }
+  });
+
   app.post("/api/admin/send-test-email", requireAdmin, async (req, res) => {
     try {
       const { to } = req.body;

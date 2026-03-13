@@ -84,22 +84,23 @@ export class WebhookHandlers {
           console.log("  ⚠️ Name doesn't match expected pattern, using defaults");
         }
 
-        let dbEvent = await storage.getEventByStripeProductId(product.id);
+        // Find or create ONE parent event per date (not per product)
+        let dbEvent = await storage.getEventByDate(eventDate);
         if (!dbEvent) {
           dbEvent = await storage.createEvent({
-            name: product.name,
+            name: eventDate,
             date: eventDate,
-            time: eventTime,
-            eventType,
+            time: null,
+            eventType: "event",
             location: "San Diego, CA",
-            priceInCents: item.price?.unit_amount || 0,
-            stripeProductId: product.id,
+            priceInCents: null,
+            stripeProductId: null,
             active: true,
             capacity: null,
           });
-          console.log("  📦 Event created in DB:", dbEvent.id);
+          console.log("  📦 Parent event created:", dbEvent.id, "→", eventDate);
         } else {
-          console.log("  📦 Event found in DB:", dbEvent.id);
+          console.log("  📦 Parent event found:", dbEvent.id, "→", eventDate);
         }
 
         if (eventDate !== "TBD") {
@@ -107,8 +108,8 @@ export class WebhookHandlers {
             const existingNames = await storage.listEventDateNames();
             const existing = existingNames.find(edn => edn.eventDate === eventDate);
             if (!existing) {
-              await storage.upsertEventDateName({ eventDate, eventName: product.name });
-              console.log("  📅 Event date name registered:", eventDate, "→", product.name);
+              await storage.upsertEventDateName({ eventDate, eventName: eventDate });
+              console.log("  📅 Event date name registered:", eventDate);
             }
           } catch (err) {
             console.error("  ⚠️ Failed to register event date name:", err);
@@ -128,6 +129,7 @@ export class WebhookHandlers {
             purchaserName: customerName,
             purchaserEmail: customerEmail,
             ticketType: eventType,
+            ticketTime: eventTime !== "TBD" ? eventTime : null,
             stripeSessionId: session.id,
             stripePaymentIntentId: paymentIntent || null,
             qrCode,

@@ -20,6 +20,7 @@ export interface IStorage {
   createEvent(event: InsertEvent): Promise<Event>;
   getEvent(id: string): Promise<Event | undefined>;
   getEventByStripeProductId(stripeProductId: string): Promise<Event | undefined>;
+  getEventByDate(date: string): Promise<Event | undefined>;
   listEvents(): Promise<Event[]>;
 
   createTicket(ticket: InsertTicket): Promise<Ticket>;
@@ -96,6 +97,11 @@ export class DatabaseStorage implements IStorage {
 
   async getEventByStripeProductId(stripeProductId: string): Promise<Event | undefined> {
     const [event] = await db.select().from(events).where(eq(events.stripeProductId, stripeProductId));
+    return event;
+  }
+
+  async getEventByDate(date: string): Promise<Event | undefined> {
+    const [event] = await db.select().from(events).where(eq(events.date, date));
     return event;
   }
 
