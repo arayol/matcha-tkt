@@ -57,6 +57,9 @@ export interface IStorage {
   getCustomerByEmail(email: string): Promise<Customer | undefined>;
   listCustomers(): Promise<Customer[]>;
 
+  deleteEvent(id: string): Promise<boolean>;
+  reassignTickets(fromEventId: string, toEventId: string): Promise<number>;
+
   listEventDateNames(): Promise<EventDateName[]>;
   upsertEventDateName(data: InsertEventDateName): Promise<EventDateName>;
   updateEventDateName(id: string, data: Partial<InsertEventDateName>): Promise<EventDateName | null>;
@@ -129,6 +132,21 @@ export class DatabaseStorage implements IStorage {
 
   async listTickets(): Promise<Ticket[]> {
     return db.select().from(tickets);
+  }
+
+  async deleteEvent(id: string): Promise<boolean> {
+    const count = await db.select().from(tickets).where(eq(tickets.eventId, id));
+    if (count.length > 0) throw new Error("Cannot delete event with associated tickets");
+    const result = await db.delete(events).where(eq(events.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async reassignTickets(fromEventId: string, toEventId: string): Promise<number> {
+    const result = await db.update(tickets)
+      .set({ eventId: toEventId })
+      .where(eq(tickets.eventId, fromEventId))
+      .returning();
+    return result.length;
   }
 
   async getTicketsByStripeSession(stripeSessionId: string): Promise<Ticket[]> {

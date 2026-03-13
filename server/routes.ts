@@ -971,6 +971,35 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  app.delete("/api/admin/events/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteEvent(id);
+      if (!deleted) return res.status(404).json({ error: "Event not found" });
+      res.json({ deleted: true, id });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message || "Delete failed" });
+    }
+  });
+
+  app.post("/api/admin/events/merge", requireAdmin, async (req, res) => {
+    try {
+      const { keepId, mergeIds } = req.body as { keepId: string; mergeIds: string[] };
+      if (!keepId || !Array.isArray(mergeIds) || mergeIds.length === 0) {
+        return res.status(400).json({ error: "keepId and mergeIds[] required" });
+      }
+      const results: Record<string, number> = {};
+      for (const fromId of mergeIds) {
+        const moved = await storage.reassignTickets(fromId, keepId);
+        results[fromId] = moved;
+        await storage.deleteEvent(fromId);
+      }
+      res.json({ kept: keepId, merged: results });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Merge failed" });
+    }
+  });
+
   app.post("/api/admin/send-test-email", requireAdmin, async (req, res) => {
     try {
       const { to } = req.body;
