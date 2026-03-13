@@ -152,7 +152,7 @@ function buildTicketEmailHtml(params: {
 
   const fullTicketUrl = `${baseUrl}/ticket/${params.ticketUrl}`;
   const firstName = params.name.split(" ")[0];
-  const emailCity = params.locationCity || "San Diego";
+  const emailCity = params.locationCity || "San Diego, CA";
   const emailAddressLine = params.locationStreet && params.locationCity
     ? `${params.locationStreet}, ${params.locationCity}${params.locationZip ? ` ${params.locationZip}` : ""}`
     : "";
@@ -536,7 +536,7 @@ function buildTicketEmailHtml(params: {
             </div>
             <div class="detail-col">
               <div class="detail-label">Location</div>
-              <div class="detail-value">${emailCity}, CA</div>
+              <div class="detail-value">${emailCity}</div>
             </div>
           </div>
 
@@ -584,7 +584,7 @@ function buildTicketEmailHtml(params: {
         <tr><td class="footer" style="background-color:#352d17;">
           <div class="footer-divider"></div>
           <div class="footer-text">
-            Matcha On Ice &middot; ${emailCity}, CA<br/>
+            Matcha On Ice &middot; ${emailCity}<br/>
             <a href="mailto:contact@matchaonice.com">contact@matchaonice.com</a>
           </div>
         </td></tr>
