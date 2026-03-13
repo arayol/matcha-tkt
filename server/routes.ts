@@ -971,6 +971,18 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  app.patch("/api/admin/events/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, date, time, location } = req.body;
+      const updated = await storage.updateEvent(id, { name, date, time, location });
+      if (!updated) return res.status(404).json({ error: "Event not found" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Update failed" });
+    }
+  });
+
   app.delete("/api/admin/events/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;

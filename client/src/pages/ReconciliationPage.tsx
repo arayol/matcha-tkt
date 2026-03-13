@@ -99,6 +99,8 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [showTicketDialog, setShowTicketDialog] = useState(false);
   const [editingEdnId, setEditingEdnId] = useState<string | null>(null);
   const [editEdnForm, setEditEdnForm] = useState({ eventName: "", locationStreet: "", locationCity: "", locationZip: "" });
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editEventForm, setEditEventForm] = useState({ name: "", date: "", time: "", location: "" });
   const [showArchivedEdns, setShowArchivedEdns] = useState(false);
   const [ticketDialogIds, setTicketDialogIds] = useState<string[]>([]);
   const [showCsvImport, setShowCsvImport] = useState(false);
@@ -179,6 +181,17 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
       setEditingEdnId(null);
+      toast({ title: "Event updated" });
+    },
+    onError: () => toast({ title: "Failed to update event", variant: "destructive" }),
+  });
+
+  const updateEventMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, string> }) =>
+      apiRequest("PATCH", `/api/admin/events/${id}`, data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      setEditingEventId(null);
       toast({ title: "Event updated" });
     },
     onError: () => toast({ title: "Failed to update event", variant: "destructive" }),
@@ -721,6 +734,106 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                 )}
               </CardContent>
             </Card>
+
+            {eventsData && eventsData.length > 0 && (
+              <Card data-testid="card-events">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-medium flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Events
+                    <Badge variant="secondary" className="ml-1">{eventsData.length}</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/40">
+                        <th className="text-left p-3 font-medium text-xs text-muted-foreground">Date</th>
+                        <th className="text-left p-3 font-medium text-xs text-muted-foreground">Time</th>
+                        <th className="text-left p-3 font-medium text-xs text-muted-foreground">Name</th>
+                        <th className="text-right p-3 font-medium text-xs text-muted-foreground w-20">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {eventsData.map((ev: any) => (
+                        <tr key={ev.id} data-testid={`event-row-${ev.id}`}>
+                          {editingEventId === ev.id ? (
+                            <td colSpan={4} className="p-3">
+                              <div className="space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="space-y-1">
+                                    <label className="text-xs text-muted-foreground">Date</label>
+                                    <Input
+                                      className="h-7 text-sm"
+                                      value={editEventForm.date}
+                                      onChange={e => setEditEventForm(f => ({ ...f, date: e.target.value }))}
+                                      placeholder="e.g. Mar 28th"
+                                      data-testid="input-edit-event-date"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-xs text-muted-foreground">Time</label>
+                                    <Input
+                                      className="h-7 text-sm"
+                                      value={editEventForm.time}
+                                      onChange={e => setEditEventForm(f => ({ ...f, time: e.target.value }))}
+                                      placeholder="e.g. 11 AM - 1 PM"
+                                      data-testid="input-edit-event-time"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-xs text-muted-foreground">Name</label>
+                                  <Input
+                                    className="h-7 text-sm"
+                                    value={editEventForm.name}
+                                    onChange={e => setEditEventForm(f => ({ ...f, name: e.target.value }))}
+                                    placeholder="Event name"
+                                    data-testid="input-edit-event-name"
+                                  />
+                                </div>
+                                <div className="flex gap-2 justify-end">
+                                  <Button size="sm" variant="ghost" onClick={() => setEditingEventId(null)} data-testid="button-cancel-edit-event">
+                                    <X className="h-3.5 w-3.5 mr-1" />Cancel
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => updateEventMutation.mutate({ id: ev.id, data: { name: editEventForm.name, date: editEventForm.date, time: editEventForm.time } })}
+                                    disabled={!editEventForm.name.trim() || updateEventMutation.isPending}
+                                    data-testid="button-save-edit-event"
+                                  >
+                                    {updateEventMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Check className="h-3.5 w-3.5 mr-1" />}
+                                    Save
+                                  </Button>
+                                </div>
+                              </div>
+                            </td>
+                          ) : (
+                            <>
+                              <td className="p-3">
+                                <Badge variant="outline" className="font-mono text-xs" data-testid={`text-event-date-${ev.id}`}>{ev.date}</Badge>
+                              </td>
+                              <td className="p-3 text-muted-foreground text-xs" data-testid={`text-event-time-${ev.id}`}>{ev.time}</td>
+                              <td className="p-3 font-medium" data-testid={`text-event-name-${ev.id}`}>{ev.name}</td>
+                              <td className="p-3 text-right">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => { setEditingEventId(ev.id); setEditEventForm({ name: ev.name || "", date: ev.date || "", time: ev.time || "", location: ev.location || "" }); }}
+                                  data-testid={`button-edit-event-${ev.id}`}
+                                >
+                                  <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                </Button>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            )}
 
             {selectedIds.size > 0 && (
               <div className="flex flex-wrap items-center gap-3">

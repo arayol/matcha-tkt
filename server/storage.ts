@@ -57,6 +57,7 @@ export interface IStorage {
   getCustomerByEmail(email: string): Promise<Customer | undefined>;
   listCustomers(): Promise<Customer[]>;
 
+  updateEvent(id: string, data: Partial<{ name: string; date: string; time: string; location: string }>): Promise<any>;
   deleteEvent(id: string): Promise<boolean>;
   reassignTickets(fromEventId: string, toEventId: string): Promise<number>;
 
@@ -132,6 +133,11 @@ export class DatabaseStorage implements IStorage {
 
   async listTickets(): Promise<Ticket[]> {
     return db.select().from(tickets);
+  }
+
+  async updateEvent(id: string, data: Partial<{ name: string; date: string; time: string; location: string }>): Promise<any> {
+    const [updated] = await db.update(events).set(data).where(eq(events.id, id)).returning();
+    return updated;
   }
 
   async deleteEvent(id: string): Promise<boolean> {
