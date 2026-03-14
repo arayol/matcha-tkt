@@ -212,6 +212,18 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
     onError: () => toast({ title: "Failed to delete event", variant: "destructive" }),
   });
 
+  const syncEventsMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/events/sync-from-dates", {}).then(r => r.json()),
+    onSuccess: async (result: { created: string[]; skipped: string[] }) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      const msg = result.created.length > 0
+        ? `Created: ${result.created.join(", ")}`
+        : "All events already exist";
+      toast({ title: "Sync complete", description: msg });
+    },
+    onError: () => toast({ title: "Sync failed", variant: "destructive" }),
+  });
+
   const mergeEventsMutation = useMutation({
     mutationFn: ({ keepId, mergeIds }: { keepId: string; mergeIds: string[] }) =>
       apiRequest("POST", "/api/admin/events/merge", { keepId, mergeIds }),
@@ -748,11 +760,24 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
             {eventsData && eventsData.length > 0 && (
               <Card data-testid="card-events">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base font-medium flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Events
-                    <Badge variant="secondary" className="ml-1">{eventsData.length}</Badge>
-                  </CardTitle>
+                  <div className="flex items-center justify-between w-full">
+                    <CardTitle className="text-base font-medium flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      Events
+                      <Badge variant="secondary" className="ml-1">{eventsData.length}</Badge>
+                    </CardTitle>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => syncEventsMutation.mutate()}
+                      disabled={syncEventsMutation.isPending}
+                      data-testid="button-sync-events"
+                      title="Create missing events from Event Names by Date"
+                    >
+                      {syncEventsMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+                      Sync
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <table className="w-full text-sm">

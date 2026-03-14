@@ -1164,6 +1164,40 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  app.post("/api/admin/events/sync-from-dates", requireAdmin, async (_req, res) => {
+    try {
+      const eventDateNames = await storage.listEventDateNames();
+      const created: string[] = [];
+      const skipped: string[] = [];
+      for (const edn of eventDateNames) {
+        if (edn.archived) continue;
+        const existing = await storage.getEventByDate(edn.eventDate);
+        if (!existing) {
+          const location = edn.locationCity
+            ? `${edn.locationCity}${edn.locationZip ? `, ${edn.locationZip}` : ""}`
+            : "San Diego, CA";
+          await storage.createEvent({
+            name: edn.eventDate,
+            date: edn.eventDate,
+            time: null,
+            eventType: "event",
+            location,
+            priceInCents: null,
+            stripeProductId: null,
+            active: true,
+            capacity: null,
+          });
+          created.push(edn.eventDate);
+        } else {
+          skipped.push(edn.eventDate);
+        }
+      }
+      res.json({ created, skipped });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Sync failed" });
+    }
+  });
+
   app.get("/api/admin/event-date-names", requireAdmin, async (_req, res) => {
     try {
       const names = await storage.listEventDateNames();
