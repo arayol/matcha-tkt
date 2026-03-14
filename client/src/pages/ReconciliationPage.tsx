@@ -763,7 +763,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                   <div className="flex items-center justify-between w-full">
                     <CardTitle className="text-base font-medium flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
-                      Tickets
+                      Events
                       <Badge variant="secondary" className="ml-1">{eventsData.length}</Badge>
                     </CardTitle>
                     <Button
