@@ -41,8 +41,12 @@ export async function generateTicketPDF(
       const locationLine = locationData?.locationStreet && locationData?.locationCity
         ? `${locationData.locationStreet}, ${locationData.locationCity}${locationData.locationZip ? ` ${locationData.locationZip}` : ""}`
         : event.location || "San Diego, CA";
+      const displayTime = ticket.ticketTime || event.time;
+      const dateLine = displayTime
+        ? `${event.date}  ·  ${displayTime}  ·  ${locationLine}`
+        : `${event.date}  ·  ${locationLine}`;
       doc.fontSize(10).fillColor(mutedText).font("Helvetica")
-        .text(`${event.date}  ·  ${event.time}  ·  ${locationLine}`, 40, y, { width: pageWidth });
+        .text(dateLine, 40, y, { width: pageWidth });
       y += 16;
     }
 

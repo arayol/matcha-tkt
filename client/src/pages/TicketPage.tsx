@@ -127,11 +127,13 @@ export default function TicketPage() {
                     <span className="text-muted-foreground">Date</span>
                     <span className="ml-auto font-medium" data-testid="text-event-date">{event.date}</span>
                   </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <Timer className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="text-muted-foreground">Time</span>
-                    <span className="ml-auto font-medium" data-testid="text-event-time">{event.time}</span>
-                  </div>
+                  {(ticket.ticketTime || event.time) && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <Timer className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-muted-foreground">Time</span>
+                      <span className="ml-auto font-medium" data-testid="text-event-time">{ticket.ticketTime || event.time}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 text-sm">
                     <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                     <span className="text-muted-foreground">Location</span>

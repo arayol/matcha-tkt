@@ -1,0 +1,101 @@
+O que fizemos depois: Entrei na interface administrativa e criei manualmente um evento correto para:
+
+LA | May 2nd, 12 PM, Sculpt Class (ID: e665d49a-620b-4978-ba2b-607645da3d63)
+
+Porém, ainda temos o primeiro evento criado automaticamente no sistema.
+
+Solução Proposta
+Para evitar que isso aconteça novamente, proponho um fluxo mais seguro e controlado:
+
+Como deveria funcionar:
+Antes de qualquer venda:
+Todos os eventos são pré-cadastrados na interface administrativa com todas as informações completas (data, horário, local, título, etc.)
+
+Quando uma venda é realizada:
+
+O Stripe envia as informações da compra via webhook
+
+O sistema PROCURA por um evento correspondente na nossa base de eventos pré-cadastrados
+
+Se encontrar → associa a compra ao evento existente e gera o ticket com todas as informações corretas
+
+Se NÃO encontrar → NÃO cria evento automaticamente, NÃO gera ticket
+
+Fluxo alternativo quando não há correspondência:
+
+Sistema envia um email de alerta para victoria@matchaonice.com informando:
+
+Dados da compra recebida
+
+Que não foi encontrado evento correspondente
+
+Link para acessar o painel administrativo e resolver
+
+A compra fica em uma fila de "pendentes" no sistema
+
+Victoria acessa o painel administrativo e:
+
+Associa a compra a um evento existente (se for o caso)
+
+OU cria um novo evento rapidamente
+
+Após essa associação manual, o sistema gera o ticket correto e envia ao cliente
+
+O que precisa ser alterado na interface administrativa?
+Para implementar essa solução, precisamos de algumas novas funcionalidades no painel:
+
+1. Gerenciamento de Mapeamento
+
+Poder criar regras que conectam os produtos do Stripe aos eventos da Matcha
+
+Exemplo: "Sculpt Class with Bray comprado para San Diego" = evento X
+
+2. Fila de Compras Pendentes
+
+Uma lista mostrando todas as compras que chegaram mas não foram associadas a eventos
+
+Cada item mostra: nome do cliente, email, produto comprado, data/hora da compra
+
+Ações possíveis:
+
+"Associar a evento existente" (com um menu para escolher qual)
+
+"Criar novo evento a partir desta compra"
+
+"Enviar ticket agora" (após associar)
+
+3. Visualização de Eventos e Tickets
+
+Lista completa de todos os eventos (os criados manualmente e os automáticos antigos)
+
+Status de cada evento (quantos tickets vendidos, pendentes, etc.)
+
+Histórico de quando cada ticket foi gerado e enviado
+
+4. Logs e Alertas
+
+Histórico de todas as ações (quem resolveu qual compra pendente, quando)
+
+Visualização dos alertas já enviados
+
+Benefícios dessa abordagem:
+✅ Controle total: Nenhum ticket é enviado sem revisão se houver qualquer inconsistência
+✅ Informações sempre corretas: Tickets só são gerados com dados completos e verificados
+✅ Processo claro: Sabemos exatamente o que fazer quando algo foge do padrão
+✅ Tranquilidade: Clientes sempre recebem tickets corretos e profissionais
+✅ Rastreabilidade: Podemos ver todo o histórico de cada venda
+
+O que faremos com as compras atuais?
+Para as compras da Elisa e Jackelyn, vamos:
+
+Associar manualmente ao evento correto que criei (LA | May 2nd)
+
+Regenerar os tickets com todas as informações certas
+
+Reenviar os emails para as clientes com os tickets corrigidos
+
+Avaliar se o evento automático (c7fdc653-5d04-44db-813e-dfa8bf2f71ea) deve ser arquivado ou removido
+
+Essa solução nos dá um processo robusto e seguro, eliminando a possibilidade de enviar tickets incorretos para os clientes enquanto mantemos a flexibilidade para lidar com casos especiais ou compras inesperadas.
+
+

@@ -103,6 +103,10 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [editEventForm, setEditEventForm] = useState({ name: "", date: "", time: "", location: "" });
   const [showArchivedEdns, setShowArchivedEdns] = useState(false);
   const [ticketDialogIds, setTicketDialogIds] = useState<string[]>([]);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState<string>("");
+  const [confirmDeleteEventId, setConfirmDeleteEventId] = useState<string | null>(null);
   const [showCsvImport, setShowCsvImport] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvPreview, setCsvPreview] = useState<{ orderNumber: string; email: string; billingName: string; phone: string; product: string; price: string; subtotal: string; discountCode: string; quantity: string; status: string }[]>([]);
@@ -156,14 +160,15 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       apiRequest("POST", "/api/admin/event-date-names", body),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       setNewEventDate("");
       setNewEventName("");
       setNewLocationStreet("");
       setNewLocationCity("");
       setNewLocationZip("");
-      toast({ title: "Event name saved" });
+      toast({ title: "Event saved" });
     },
-    onError: () => toast({ title: "Failed to save event name", variant: "destructive" }),
+    onError: () => toast({ title: "Failed to save event", variant: "destructive" }),
   });
 
   const deleteEventNameMutation = useMutation({
@@ -195,6 +200,29 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       toast({ title: "Event updated" });
     },
     onError: () => toast({ title: "Failed to update event", variant: "destructive" }),
+  });
+
+  const deleteEventMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/events/${id}`),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      setConfirmDeleteEventId(null);
+      toast({ title: "Event deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete event", variant: "destructive" }),
+  });
+
+  const mergeEventsMutation = useMutation({
+    mutationFn: ({ keepId, mergeIds }: { keepId: string; mergeIds: string[] }) =>
+      apiRequest("POST", "/api/admin/events/merge", { keepId, mergeIds }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      setShowMergeDialog(false);
+      setMergeSourceId(null);
+      setMergeTargetId("");
+      toast({ title: "Tickets moved and event deleted" });
+    },
+    onError: () => toast({ title: "Failed to merge events", variant: "destructive" }),
   });
 
   const generateTicketsMutation = useMutation({
@@ -501,31 +529,13 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                   <div className="flex flex-wrap items-end gap-3">
                     <div className="space-y-1">
                       <label className="text-xs text-muted-foreground">Event Date</label>
-                      <Select value={newEventDate} onValueChange={setNewEventDate}>
-                        <SelectTrigger className="w-[200px]" data-testid="select-event-date">
-                          <SelectValue placeholder="Select date..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(() => {
-                            const MONTH_ORDER: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
-                            const parseDateSort = (d: string) => {
-                              const m = d.match(/^(\w+)\s+(\d+)/i);
-                              if (!m) return 0;
-                              const month = MONTH_ORDER[m[1].toLowerCase().slice(0, 3)] ?? 0;
-                              const day = parseInt(m[2], 10) || 0;
-                              return month * 100 + day;
-                            };
-                            const allDates = new Set<string>();
-                            (csvOrders || []).forEach((o: any) => { if (o.parsedEventDate) allDates.add(o.parsedEventDate); });
-                            divergences.forEach(d => { if (d.eventDate) allDates.add(d.eventDate); });
-                            (eventsData || []).forEach((e: any) => { if (e.date && e.date !== "TBD") allDates.add(e.date); });
-                            const sorted = Array.from(allDates).sort((a, b) => parseDateSort(b) - parseDateSort(a));
-                            return sorted.map(date => (
-                              <SelectItem key={date} value={date}>{date}</SelectItem>
-                            ));
-                          })()}
-                        </SelectContent>
-                      </Select>
+                      <Input
+                        className="w-[200px]"
+                        placeholder="e.g. LA | May 2nd"
+                        value={newEventDate}
+                        onChange={e => setNewEventDate(e.target.value)}
+                        data-testid="input-new-event-date"
+                      />
                     </div>
                     <div className="space-y-1 flex-1 min-w-[200px]">
                       <label className="text-xs text-muted-foreground">Event Name</label>
@@ -749,9 +759,9 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                     <thead>
                       <tr className="border-b bg-muted/40">
                         <th className="text-left p-3 font-medium text-xs text-muted-foreground">Date</th>
-                        <th className="text-left p-3 font-medium text-xs text-muted-foreground">Time</th>
                         <th className="text-left p-3 font-medium text-xs text-muted-foreground">Name</th>
-                        <th className="text-right p-3 font-medium text-xs text-muted-foreground w-20">Actions</th>
+                        <th className="text-center p-3 font-medium text-xs text-muted-foreground w-16">Tickets</th>
+                        <th className="text-right p-3 font-medium text-xs text-muted-foreground w-28">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -772,25 +782,15 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                                     />
                                   </div>
                                   <div className="space-y-1">
-                                    <label className="text-xs text-muted-foreground">Time</label>
+                                    <label className="text-xs text-muted-foreground">Name</label>
                                     <Input
                                       className="h-7 text-sm"
-                                      value={editEventForm.time}
-                                      onChange={e => setEditEventForm(f => ({ ...f, time: e.target.value }))}
-                                      placeholder="e.g. 11 AM - 1 PM"
-                                      data-testid="input-edit-event-time"
+                                      value={editEventForm.name}
+                                      onChange={e => setEditEventForm(f => ({ ...f, name: e.target.value }))}
+                                      placeholder="Event name"
+                                      data-testid="input-edit-event-name"
                                     />
                                   </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-xs text-muted-foreground">Name</label>
-                                  <Input
-                                    className="h-7 text-sm"
-                                    value={editEventForm.name}
-                                    onChange={e => setEditEventForm(f => ({ ...f, name: e.target.value }))}
-                                    placeholder="Event name"
-                                    data-testid="input-edit-event-name"
-                                  />
                                 </div>
                                 <div className="flex gap-2 justify-end">
                                   <Button size="sm" variant="ghost" onClick={() => setEditingEventId(null)} data-testid="button-cancel-edit-event">
@@ -808,22 +808,69 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                                 </div>
                               </div>
                             </td>
+                          ) : confirmDeleteEventId === ev.id ? (
+                            <td colSpan={4} className="p-3">
+                              <div className="flex items-center gap-3 text-sm">
+                                <span className="text-destructive font-medium">Delete "{ev.name}"? This cannot be undone.</span>
+                                <div className="flex gap-2 ml-auto">
+                                  <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteEventId(null)}>Cancel</Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => deleteEventMutation.mutate(ev.id)}
+                                    disabled={deleteEventMutation.isPending}
+                                    data-testid={`button-confirm-delete-event-${ev.id}`}
+                                  >
+                                    {deleteEventMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : null}
+                                    Delete
+                                  </Button>
+                                </div>
+                              </div>
+                            </td>
                           ) : (
                             <>
                               <td className="p-3">
                                 <Badge variant="outline" className="font-mono text-xs" data-testid={`text-event-date-${ev.id}`}>{ev.date}</Badge>
                               </td>
-                              <td className="p-3 text-muted-foreground text-xs" data-testid={`text-event-time-${ev.id}`}>{ev.time}</td>
-                              <td className="p-3 font-medium" data-testid={`text-event-name-${ev.id}`}>{ev.name}</td>
+                              <td className="p-3 font-medium text-sm" data-testid={`text-event-name-${ev.id}`}>{ev.name}</td>
+                              <td className="p-3 text-center">
+                                <Badge variant={ev.ticketCount > 0 ? "secondary" : "outline"} className="text-xs" data-testid={`text-event-tickets-${ev.id}`}>
+                                  {ev.ticketCount}
+                                </Badge>
+                              </td>
                               <td className="p-3 text-right">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => { setEditingEventId(ev.id); setEditEventForm({ name: ev.name || "", date: ev.date || "", time: ev.time || "", location: ev.location || "" }); }}
-                                  data-testid={`button-edit-event-${ev.id}`}
-                                >
-                                  <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                </Button>
+                                <div className="flex items-center justify-end gap-0.5">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    title="Edit event"
+                                    onClick={() => { setEditingEventId(ev.id); setEditEventForm({ name: ev.name || "", date: ev.date || "", time: ev.time || "", location: ev.location || "" }); }}
+                                    data-testid={`button-edit-event-${ev.id}`}
+                                  >
+                                    <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </Button>
+                                  {ev.ticketCount > 0 ? (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      title="Move tickets to another event"
+                                      onClick={() => { setMergeSourceId(ev.id); setMergeTargetId(""); setShowMergeDialog(true); }}
+                                      data-testid={`button-merge-event-${ev.id}`}
+                                    >
+                                      <GitCompareArrows className="h-3.5 w-3.5 text-muted-foreground" />
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      title="Delete event"
+                                      onClick={() => setConfirmDeleteEventId(ev.id)}
+                                      data-testid={`button-delete-event-${ev.id}`}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                    </Button>
+                                  )}
+                                </div>
                               </td>
                             </>
                           )}
@@ -1108,6 +1155,49 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                 <Send className="h-4 w-4 mr-1" />
               )}
               Send Tickets & Reconcile
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showMergeDialog} onOpenChange={(open) => { if (!open) { setShowMergeDialog(false); setMergeSourceId(null); setMergeTargetId(""); } }}>
+        <DialogContent className="max-w-md" data-testid="dialog-merge-event">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitCompareArrows className="h-5 w-5" />
+              Move Tickets to Another Event
+            </DialogTitle>
+            <DialogDescription>
+              All tickets from "{eventsData?.find((e: any) => e.id === mergeSourceId)?.name}" will be moved to the selected event. The source event will be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 my-2">
+            <label className="text-sm font-medium">Target event (keep):</label>
+            <Select value={mergeTargetId} onValueChange={setMergeTargetId}>
+              <SelectTrigger data-testid="select-merge-target">
+                <SelectValue placeholder="Select target event..." />
+              </SelectTrigger>
+              <SelectContent>
+                {(eventsData || [])
+                  .filter((e: any) => e.id !== mergeSourceId)
+                  .map((e: any) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.name} <span className="text-muted-foreground ml-1">({e.ticketCount} tickets)</span>
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowMergeDialog(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={!mergeTargetId || mergeEventsMutation.isPending}
+              onClick={() => mergeSourceId && mergeEventsMutation.mutate({ keepId: mergeTargetId, mergeIds: [mergeSourceId] })}
+              data-testid="button-confirm-merge"
+            >
+              {mergeEventsMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Move Tickets & Delete
             </Button>
           </DialogFooter>
         </DialogContent>

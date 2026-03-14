@@ -74,7 +74,12 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   app.get("/api/events", requireAuth, async (_req, res) => {
     try {
       const eventList = await storage.listEvents();
-      res.json(eventList);
+      const ticketList = await storage.listTickets();
+      const countMap = new Map<string, number>();
+      for (const t of ticketList) {
+        countMap.set(t.eventId, (countMap.get(t.eventId) || 0) + 1);
+      }
+      res.json(eventList.map(e => ({ ...e, ticketCount: countMap.get(e.id) || 0 })));
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch events" });
     }
@@ -1181,6 +1186,21 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         locationCity: locationCity || null,
         locationZip: locationZip || null,
       });
+      // Auto-create the parent event record if it doesn't exist yet
+      const existingEvent = await storage.getEventByDate(eventDate);
+      if (!existingEvent) {
+        await storage.createEvent({
+          name: eventDate,
+          date: eventDate,
+          time: null,
+          eventType: "event",
+          location: locationCity ? `${locationCity}${locationZip ? `, ${locationZip}` : ""}` : "San Diego, CA",
+          priceInCents: null,
+          stripeProductId: null,
+          active: true,
+          capacity: null,
+        });
+      }
       res.json(result);
     } catch (err) {
       res.status(500).json({ error: "Failed to save event date name" });
