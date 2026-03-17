@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   GitCompareArrows, AlertTriangle, CheckCircle2, XCircle,
   Download, Filter, Edit2, Check, X, Loader2, Calendar, Plus, Trash2, Send, MailCheck,
-  Upload, FileUp, FileSpreadsheet, RotateCcw, Archive, Timer,
+  Upload, FileUp, FileSpreadsheet, RotateCcw, Archive, Timer, Scissors,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -232,6 +232,15 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       toast({ title: "Ticket times fixed", description: backfillLine });
     },
     onError: () => toast({ title: "Failed to fix ticket times", variant: "destructive" }),
+  });
+
+  const splitEventMutation = useMutation({
+    mutationFn: (eventId: string) => apiRequest("POST", "/api/admin/events/split-by-type", { eventId }).then(r => r.json()),
+    onSuccess: async (result: { message: string; created: { eventName: string; ticketCount: number }[] }) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      toast({ title: "Event split", description: result.message });
+    },
+    onError: () => toast({ title: "Failed to split event", variant: "destructive" }),
   });
 
   const mergeEventsMutation = useMutation({
@@ -897,6 +906,18 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                                   >
                                     <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
                                   </Button>
+                                  {ev.ticketCount > 1 && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      title="Split event by ticket type"
+                                      onClick={() => splitEventMutation.mutate(ev.id)}
+                                      disabled={splitEventMutation.isPending}
+                                      data-testid={`button-split-event-${ev.id}`}
+                                    >
+                                      <Scissors className="h-3.5 w-3.5 text-muted-foreground" />
+                                    </Button>
+                                  )}
                                   {ev.ticketCount > 0 ? (
                                     <Button
                                       size="icon"

@@ -1164,6 +1164,73 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  app.post("/api/admin/events/split-by-type", requireAdmin, async (req, res) => {
+    try {
+      const { eventId } = req.body;
+      if (!eventId) return res.status(400).json({ error: "eventId required" });
+
+      const { db } = await import("./db");
+      const { events: eventsTable, tickets: ticketsTable } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const parentEvent = await storage.getEvent(eventId);
+      if (!parentEvent) return res.status(404).json({ error: "Event not found" });
+
+      const tickets = await storage.getTicketsByEvent(eventId);
+      if (tickets.length === 0) return res.json({ message: "No tickets to split", created: [] });
+
+      const groups = new Map<string, typeof tickets>();
+      for (const t of tickets) {
+        const key = `${t.ticketType || "General"}||${t.ticketTime || ""}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(t);
+      }
+
+      if (groups.size <= 1) return res.json({ message: "Only one ticket type, nothing to split", created: [] });
+
+      const created: { eventName: string; ticketCount: number }[] = [];
+      let isFirst = true;
+
+      for (const [key, groupTickets] of groups) {
+        const [ticketType, ticketTime] = key.split("||");
+
+        if (isFirst) {
+          await db.update(eventsTable).set({
+            name: `${parentEvent.date}, ${ticketTime ? ticketTime + ", " : ""}${ticketType}`,
+            time: ticketTime || null,
+            eventType: ticketType,
+          }).where(eq(eventsTable.id, parentEvent.id));
+          isFirst = false;
+          created.push({ eventName: `${parentEvent.date}, ${ticketType}`, ticketCount: groupTickets.length });
+          continue;
+        }
+
+        const eventName = `${parentEvent.date}, ${ticketTime ? ticketTime + ", " : ""}${ticketType}`;
+        const newEvent = await storage.createEvent({
+          name: eventName,
+          date: parentEvent.date,
+          time: ticketTime || null,
+          eventType: ticketType,
+          location: parentEvent.location,
+          priceInCents: null,
+          stripeProductId: null,
+          active: true,
+          capacity: null,
+        });
+
+        for (const t of groupTickets) {
+          await db.update(ticketsTable).set({ eventId: newEvent.id }).where(eq(ticketsTable.id, t.id));
+        }
+
+        created.push({ eventName, ticketCount: groupTickets.length });
+      }
+
+      res.json({ message: `Split into ${created.length} events`, created });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Split failed" });
+    }
+  });
+
   app.post("/api/admin/events/sync-from-dates", requireAdmin, async (_req, res) => {
     try {
       const eventDateNames = await storage.listEventDateNames();

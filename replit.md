@@ -133,7 +133,7 @@ Examples:
 - `Feb 15th, 10:00 - 2PM Event Ticket - General Admission` → date=Feb 15th, time=10:00 - 2PM, eventType=Event Ticket, ticketType=General Admission Ticket
 - `Feb 26th, 6 PM - Members Event Ticket` → date=Feb 26th, time=6 PM, eventType=Members Event, ticketType=Members Event Ticket
 Parser extracts: parsedEventDate, parsedEventTime, parsedEventType, parsedTicketType, parsedClassName, orderType (ticket/vendor)
-Events are identified by date (month + day). Admin can assign custom event names via the "Event Names by Date" section on the Reconciliation page (stored in event_date_names table).
+Events are identified by Stripe product ID (one event per class/product). The webhook creates a separate event for each Stripe product. Event Names by Date (event_date_names table) provides display names and addresses grouped by date. Admin tools: Split (divide event by ticket type), Merge (move tickets between events), Sync (create missing events from dates), Fix Times (backfill ticketTime).
 
 ## Setup on New Replit
 See `SETUP.md` for full setup instructions including database schema, environment variables, integrations, and project structure.
