@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   GitCompareArrows, AlertTriangle, CheckCircle2, XCircle,
   Download, Filter, Edit2, Check, X, Loader2, Calendar, Plus, Trash2, Send, MailCheck,
-  Upload, FileUp, FileSpreadsheet, RotateCcw, Archive,
+  Upload, FileUp, FileSpreadsheet, RotateCcw, Archive, Timer,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -222,6 +222,16 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       toast({ title: "Sync complete", description: msg });
     },
     onError: () => toast({ title: "Sync failed", variant: "destructive" }),
+  });
+
+  const migrateTimesMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/migrate/event-model", {}).then(r => r.json()),
+    onSuccess: async (result: { ok: boolean; log: string[] }) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      const backfillLine = result.log?.find(l => l.includes("Backfilled")) || "Done";
+      toast({ title: "Ticket times fixed", description: backfillLine });
+    },
+    onError: () => toast({ title: "Failed to fix ticket times", variant: "destructive" }),
   });
 
   const mergeEventsMutation = useMutation({
@@ -766,17 +776,30 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                       Events
                       <Badge variant="secondary" className="ml-1">{eventsData.length}</Badge>
                     </CardTitle>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => syncEventsMutation.mutate()}
-                      disabled={syncEventsMutation.isPending}
-                      data-testid="button-sync-events"
-                      title="Create missing events from Event Names by Date"
-                    >
-                      {syncEventsMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
-                      Sync
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => migrateTimesMutation.mutate()}
+                        disabled={migrateTimesMutation.isPending}
+                        data-testid="button-fix-times"
+                        title="Backfill missing ticket times from ticket type"
+                      >
+                        {migrateTimesMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Timer className="h-3.5 w-3.5 mr-1" />}
+                        Fix Times
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => syncEventsMutation.mutate()}
+                        disabled={syncEventsMutation.isPending}
+                        data-testid="button-sync-events"
+                        title="Create missing events from Event Names by Date"
+                      >
+                        {syncEventsMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+                        Sync
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
