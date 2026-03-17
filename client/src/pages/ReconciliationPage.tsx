@@ -234,6 +234,15 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
     onError: () => toast({ title: "Failed to fix ticket times", variant: "destructive" }),
   });
 
+  const restoreSplitMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/events/restore-split", {}).then(r => r.json()),
+    onSuccess: async (result: { ok: boolean; log: string[] }) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      toast({ title: "Events restored", description: result.log?.join("; ") || "Done" });
+    },
+    onError: () => toast({ title: "Restore failed", variant: "destructive" }),
+  });
+
   const splitEventMutation = useMutation({
     mutationFn: (eventId: string) => apiRequest("POST", "/api/admin/events/split-by-type", { eventId }).then(r => r.json()),
     onSuccess: async (result: { message: string; created: { eventName: string; ticketCount: number }[] }) => {
@@ -789,6 +798,17 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => restoreSplitMutation.mutate()}
+                        disabled={restoreSplitMutation.isPending}
+                        data-testid="button-restore-events"
+                        title="Restore events: split merged events by ticket type and fix names"
+                      >
+                        {restoreSplitMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+                        Restore
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => migrateTimesMutation.mutate()}
                         disabled={migrateTimesMutation.isPending}
                         data-testid="button-fix-times"
@@ -796,17 +816,6 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                       >
                         {migrateTimesMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Timer className="h-3.5 w-3.5 mr-1" />}
                         Fix Times
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => syncEventsMutation.mutate()}
-                        disabled={syncEventsMutation.isPending}
-                        data-testid="button-sync-events"
-                        title="Create missing events from Event Names by Date"
-                      >
-                        {syncEventsMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
-                        Sync
                       </Button>
                     </div>
                   </div>

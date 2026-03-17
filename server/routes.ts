@@ -1020,39 +1020,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   app.post("/api/admin/migrate/event-model", requireAdmin, async (_req, res) => {
     try {
       const { db } = await import("./db");
-      const { events: eventsTable, tickets: ticketsTable } = await import("@shared/schema");
-      const { eq, inArray } = await import("drizzle-orm");
+      const { tickets: ticketsTable } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
 
       const log: string[] = [];
 
-      // Step 1: Rename the OC | Mar 28th event to just its date
-      const allEvents = await storage.listEvents();
-      for (const ev of allEvents) {
-        if (ev.name !== ev.date && ev.date !== "TBD") {
-          await db.update(eventsTable).set({ name: ev.date, time: null }).where(eq(eventsTable.id, ev.id));
-          log.push(`Renamed event "${ev.name}" → "${ev.date}"`);
-        }
-      }
-
-      // Step 2: Merge duplicate events with same date (keep first, move tickets to it)
-      const eventsByDate = new Map<string, typeof allEvents[0][]>();
-      for (const ev of allEvents) {
-        const list = eventsByDate.get(ev.date) || [];
-        list.push(ev);
-        eventsByDate.set(ev.date, list);
-      }
-      for (const [date, group] of eventsByDate) {
-        if (group.length <= 1) continue;
-        const [keep, ...dupes] = group;
-        const dupeIds = dupes.map(d => d.id);
-        await db.update(ticketsTable).set({ eventId: keep.id }).where(inArray(ticketsTable.eventId, dupeIds));
-        for (const dupe of dupes) {
-          await db.delete(eventsTable).where(eq(eventsTable.id, dupe.id));
-          log.push(`Merged event "${dupe.date}" (${dupe.id.slice(0, 8)}) → kept ${keep.id.slice(0, 8)}`);
-        }
-      }
-
-      // Step 3: Backfill ticketTime for existing tickets from their ticketType / event names
       const timeMap: Record<string, string> = {
         "GA Ticket Access":                  "11 AM - 1PM",
         "Fever Pilates Class: Austen":        "11 AM",
@@ -1075,6 +1047,81 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       res.json({ ok: true, log });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || "Migration failed" });
+    }
+  });
+
+  app.post("/api/admin/events/restore-split", requireAdmin, async (_req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { events: eventsTable, tickets: ticketsTable } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const log: string[] = [];
+      const allEvents = await storage.listEvents();
+      const allTickets = await storage.listTickets();
+
+      for (const ev of allEvents) {
+        const evTickets = allTickets.filter(t => t.eventId === ev.id);
+        const groups = new Map<string, typeof evTickets>();
+        for (const t of evTickets) {
+          const key = t.ticketType || "General";
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key)!.push(t);
+        }
+
+        if (groups.size <= 1) {
+          const ticketType = evTickets[0]?.ticketType;
+          const ticketTime = evTickets[0]?.ticketTime;
+          if (ticketType && ev.name === ev.date) {
+            const newName = `${ev.date}, ${ticketTime ? ticketTime + ", " : ""}${ticketType}`;
+            await db.update(eventsTable).set({
+              name: newName,
+              time: ticketTime || null,
+              eventType: ticketType,
+            }).where(eq(eventsTable.id, ev.id));
+            log.push(`Restored name: "${newName}"`);
+          }
+          continue;
+        }
+
+        let isFirst = true;
+        for (const [ticketType, groupTickets] of groups) {
+          const ticketTime = groupTickets[0]?.ticketTime || null;
+          const eventName = `${ev.date}, ${ticketTime ? ticketTime + ", " : ""}${ticketType}`;
+
+          if (isFirst) {
+            await db.update(eventsTable).set({
+              name: eventName,
+              time: ticketTime,
+              eventType: ticketType,
+            }).where(eq(eventsTable.id, ev.id));
+            log.push(`Updated existing: "${eventName}" (${groupTickets.length} tickets)`);
+            isFirst = false;
+            continue;
+          }
+
+          const newEvent = await storage.createEvent({
+            name: eventName,
+            date: ev.date,
+            time: ticketTime,
+            eventType: ticketType,
+            location: ev.location,
+            priceInCents: null,
+            stripeProductId: null,
+            active: true,
+            capacity: null,
+          });
+
+          for (const t of groupTickets) {
+            await db.update(ticketsTable).set({ eventId: newEvent.id }).where(eq(ticketsTable.id, t.id));
+          }
+          log.push(`Created: "${eventName}" (${groupTickets.length} tickets) → ${newEvent.id.slice(0, 8)}`);
+        }
+      }
+
+      res.json({ ok: true, log });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Restore failed" });
     }
   });
 
