@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   GitCompareArrows, AlertTriangle, CheckCircle2, XCircle,
   Download, Filter, Edit2, Check, X, Loader2, Calendar, Plus, Trash2, Send, MailCheck,
-  Upload, FileUp, FileSpreadsheet, RotateCcw, Archive,
+  Upload, FileUp, FileSpreadsheet, RotateCcw, Archive, Scissors, Clock,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -107,6 +107,11 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
   const [mergeTargetId, setMergeTargetId] = useState<string>("");
   const [confirmDeleteEventId, setConfirmDeleteEventId] = useState<string | null>(null);
+  const [showFixTimesDialog, setShowFixTimesDialog] = useState(false);
+  const [showSplitDialog, setShowSplitDialog] = useState(false);
+  const [splitSourceEventId, setSplitSourceEventId] = useState<string | null>(null);
+  const [splitSelectedTickets, setSplitSelectedTickets] = useState<Set<string>>(new Set());
+  const [splitTargetEventId, setSplitTargetEventId] = useState<string>("");
   const [showCsvImport, setShowCsvImport] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvPreview, setCsvPreview] = useState<{ orderNumber: string; email: string; billingName: string; phone: string; product: string; price: string; subtotal: string; discountCode: string; quantity: string; status: string }[]>([]);
@@ -128,6 +133,11 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
 
   const { data: eventsData } = useQuery<any[]>({
     queryKey: ["/api/events"],
+  });
+
+  const { data: splitTicketsData } = useQuery<{ id: string; billingName: string; email: string; ticketType: string; ticketTime: string | null }[]>({
+    queryKey: ["/api/admin/events", splitSourceEventId, "tickets"],
+    enabled: !!splitSourceEventId && showSplitDialog,
   });
 
   const applyMutation = useMutation({
@@ -222,6 +232,32 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       toast({ title: "Sync complete", description: msg });
     },
     onError: () => toast({ title: "Sync failed", variant: "destructive" }),
+  });
+
+  const fixTimesMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/migrate/event-model", {}).then(r => r.json()),
+    onSuccess: async (result: { ok: boolean; log: string[] }) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/reconciliation"] });
+      setShowFixTimesDialog(false);
+      toast({ title: "Fix Times complete", description: result.log.join("; ") });
+    },
+    onError: () => { toast({ title: "Fix Times failed", variant: "destructive" }); },
+  });
+
+  const moveTicketsMutation = useMutation({
+    mutationFn: (body: { ticketIds: string[]; targetEventId: string }) =>
+      apiRequest("POST", "/api/admin/tickets/move", body).then(r => r.json()),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/reconciliation"] });
+      setShowSplitDialog(false);
+      setSplitSourceEventId(null);
+      setSplitSelectedTickets(new Set());
+      setSplitTargetEventId("");
+      toast({ title: "Tickets moved successfully" });
+    },
+    onError: () => toast({ title: "Failed to move tickets", variant: "destructive" }),
   });
 
   const mergeEventsMutation = useMutation({
@@ -766,17 +802,29 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                       Events
                       <Badge variant="secondary" className="ml-1">{eventsData.length}</Badge>
                     </CardTitle>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => syncEventsMutation.mutate()}
-                      disabled={syncEventsMutation.isPending}
-                      data-testid="button-sync-events"
-                      title="Create missing events from Event Names by Date"
-                    >
-                      {syncEventsMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
-                      Sync
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowFixTimesDialog(true)}
+                        data-testid="button-fix-times"
+                        title="Backfill class times on tickets"
+                      >
+                        <Clock className="h-3.5 w-3.5 mr-1" />
+                        Fix Times
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => syncEventsMutation.mutate()}
+                        disabled={syncEventsMutation.isPending}
+                        data-testid="button-sync-events"
+                        title="Create missing events from Event Names by Date"
+                      >
+                        {syncEventsMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+                        Sync
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -875,15 +923,31 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                                     <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
                                   </Button>
                                   {ev.ticketCount > 0 ? (
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      title="Move tickets to another event"
-                                      onClick={() => { setMergeSourceId(ev.id); setMergeTargetId(""); setShowMergeDialog(true); }}
-                                      data-testid={`button-merge-event-${ev.id}`}
-                                    >
-                                      <GitCompareArrows className="h-3.5 w-3.5 text-muted-foreground" />
-                                    </Button>
+                                    <>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        title="Split — move selected tickets to another event"
+                                        onClick={() => {
+                                          setSplitSourceEventId(ev.id);
+                                          setSplitSelectedTickets(new Set());
+                                          setSplitTargetEventId("");
+                                          setShowSplitDialog(true);
+                                        }}
+                                        data-testid={`button-split-event-${ev.id}`}
+                                      >
+                                        <Scissors className="h-3.5 w-3.5 text-muted-foreground" />
+                                      </Button>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        title="Merge — move ALL tickets to another event"
+                                        onClick={() => { setMergeSourceId(ev.id); setMergeTargetId(""); setShowMergeDialog(true); }}
+                                        data-testid={`button-merge-event-${ev.id}`}
+                                      >
+                                        <GitCompareArrows className="h-3.5 w-3.5 text-muted-foreground" />
+                                      </Button>
+                                    </>
                                   ) : (
                                     <Button
                                       size="icon"
@@ -1180,6 +1244,111 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                 <Send className="h-4 w-4 mr-1" />
               )}
               Send Tickets & Reconcile
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showFixTimesDialog} onOpenChange={(open) => { if (!open) setShowFixTimesDialog(false); }}>
+        <DialogContent className="max-w-md" data-testid="dialog-fix-times">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Fix Times
+            </DialogTitle>
+            <DialogDescription>
+              This action will make the following changes:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm my-2">
+            <div className="flex items-start gap-2">
+              <span className="text-muted-foreground mt-0.5">1.</span>
+              <span>Rename events to just their date (removing class name and time from the event title)</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-muted-foreground mt-0.5">2.</span>
+              <span>Merge duplicate events with the same date (keep the first, move tickets)</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-muted-foreground mt-0.5">3.</span>
+              <span>Fill in the class time on each ticket based on its type:
+                <span className="block text-xs text-muted-foreground mt-1 ml-2">
+                  GA Ticket Access → 11 AM - 1PM | Fever Pilates: Austen → 11 AM | Fever Pilates: Grazella → 12:30 PM | Mat Pilates with Lauren → 10 AM | Sculpt Class with Bray → 12 PM
+                </span>
+              </span>
+            </div>
+          </div>
+          <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">This action cannot be undone. Do you want to continue?</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowFixTimesDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => fixTimesMutation.mutate()}
+              disabled={fixTimesMutation.isPending}
+              data-testid="button-confirm-fix-times"
+            >
+              {fixTimesMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Apply Fix Times
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSplitDialog} onOpenChange={(open) => { if (!open) { setShowSplitDialog(false); setSplitSourceEventId(null); setSplitSelectedTickets(new Set()); setSplitTargetEventId(""); } }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" data-testid="dialog-split-event">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scissors className="h-5 w-5" />
+              Split Event — Move Selected Tickets
+            </DialogTitle>
+            <DialogDescription>
+              Select the tickets you want to move to a different event. Unselected tickets will stay in "{eventsData?.find((e: any) => e.id === splitSourceEventId)?.name}".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 my-2">
+            <label className="text-sm font-medium">Tickets in this event:</label>
+            <div className="space-y-1 max-h-48 overflow-y-auto border rounded-md p-2">
+              {splitTicketsData && splitTicketsData.length > 0 ? splitTicketsData.map((t) => (
+                  <label key={t.id} className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer text-sm">
+                    <Checkbox
+                      checked={splitSelectedTickets.has(t.id)}
+                      onCheckedChange={(checked) => {
+                        const next = new Set(splitSelectedTickets);
+                        if (checked) next.add(t.id); else next.delete(t.id);
+                        setSplitSelectedTickets(next);
+                      }}
+                      data-testid={`checkbox-split-ticket-${t.id}`}
+                    />
+                    <span className="font-medium">{t.billingName || t.email}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">{t.ticketType}{t.ticketTime ? ` · ${t.ticketTime}` : ""}</span>
+                  </label>
+                )) : <p className="text-sm text-muted-foreground py-2">No tickets found</p>}
+            </div>
+            <label className="text-sm font-medium">Move to event:</label>
+            <Select value={splitTargetEventId} onValueChange={setSplitTargetEventId}>
+              <SelectTrigger data-testid="select-split-target">
+                <SelectValue placeholder="Select target event..." />
+              </SelectTrigger>
+              <SelectContent>
+                {(eventsData || [])
+                  .filter((e: any) => e.id !== splitSourceEventId)
+                  .map((e: any) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.name} ({e.ticketCount} tickets)
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-sm text-muted-foreground">{splitSelectedTickets.size} ticket(s) selected to move</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowSplitDialog(false)}>Cancel</Button>
+            <Button
+              disabled={splitSelectedTickets.size === 0 || !splitTargetEventId || moveTicketsMutation.isPending}
+              onClick={() => moveTicketsMutation.mutate({ ticketIds: Array.from(splitSelectedTickets), targetEventId: splitTargetEventId })}
+              data-testid="button-confirm-split"
+            >
+              {moveTicketsMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Move {splitSelectedTickets.size} Ticket(s)
             </Button>
           </DialogFooter>
         </DialogContent>

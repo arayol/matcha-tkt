@@ -1017,6 +1017,34 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  app.get("/api/admin/events/:id/tickets", requireAdmin, async (req, res) => {
+    try {
+      const allTickets = await storage.listTickets();
+      const eventTickets = allTickets.filter(t => t.eventId === req.params.id);
+      res.json(eventTickets.map(t => ({ id: t.id, billingName: t.billingName, email: t.email, ticketType: t.ticketType, ticketTime: t.ticketTime })));
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to fetch tickets" });
+    }
+  });
+
+  app.post("/api/admin/tickets/move", requireAdmin, async (req, res) => {
+    try {
+      const { ticketIds, targetEventId } = req.body as { ticketIds: string[]; targetEventId: string };
+      if (!Array.isArray(ticketIds) || ticketIds.length === 0 || !targetEventId) {
+        return res.status(400).json({ error: "ticketIds[] and targetEventId required" });
+      }
+      const targetEvent = await storage.getEvent(targetEventId);
+      if (!targetEvent) return res.status(404).json({ error: "Target event not found" });
+      const { db } = await import("./db");
+      const { tickets: ticketsTable } = await import("@shared/schema");
+      const { eq, inArray } = await import("drizzle-orm");
+      await db.update(ticketsTable).set({ eventId: targetEventId }).where(inArray(ticketsTable.id, ticketIds));
+      res.json({ moved: ticketIds.length, targetEventId });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Move failed" });
+    }
+  });
+
   app.post("/api/admin/migrate/event-model", requireAdmin, async (_req, res) => {
     try {
       const { db } = await import("./db");
