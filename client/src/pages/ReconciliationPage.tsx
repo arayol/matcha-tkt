@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   GitCompareArrows, AlertTriangle, CheckCircle2, XCircle,
   Download, Filter, Edit2, Check, X, Loader2, Calendar, Plus, Trash2, Send, MailCheck,
-  Upload, FileUp, FileSpreadsheet, RotateCcw, Archive, Timer, Scissors,
+  Upload, FileUp, FileSpreadsheet, RotateCcw, Archive,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -222,34 +222,6 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       toast({ title: "Sync complete", description: msg });
     },
     onError: () => toast({ title: "Sync failed", variant: "destructive" }),
-  });
-
-  const migrateTimesMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/admin/migrate/event-model", {}).then(r => r.json()),
-    onSuccess: async (result: { ok: boolean; log: string[] }) => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      const backfillLine = result.log?.find(l => l.includes("Backfilled")) || "Done";
-      toast({ title: "Ticket times fixed", description: backfillLine });
-    },
-    onError: () => toast({ title: "Failed to fix ticket times", variant: "destructive" }),
-  });
-
-  const restoreSplitMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/admin/events/restore-split", {}).then(r => r.json()),
-    onSuccess: async (result: { ok: boolean; log: string[] }) => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      toast({ title: "Events restored", description: result.log?.join("; ") || "Done" });
-    },
-    onError: () => toast({ title: "Restore failed", variant: "destructive" }),
-  });
-
-  const splitEventMutation = useMutation({
-    mutationFn: (eventId: string) => apiRequest("POST", "/api/admin/events/split-by-type", { eventId }).then(r => r.json()),
-    onSuccess: async (result: { message: string; created: { eventName: string; ticketCount: number }[] }) => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      toast({ title: "Event split", description: result.message });
-    },
-    onError: () => toast({ title: "Failed to split event", variant: "destructive" }),
   });
 
   const mergeEventsMutation = useMutation({
@@ -794,30 +766,17 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                       Events
                       <Badge variant="secondary" className="ml-1">{eventsData.length}</Badge>
                     </CardTitle>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => restoreSplitMutation.mutate()}
-                        disabled={restoreSplitMutation.isPending}
-                        data-testid="button-restore-events"
-                        title="Restore events: split merged events by ticket type and fix names"
-                      >
-                        {restoreSplitMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
-                        Restore
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => migrateTimesMutation.mutate()}
-                        disabled={migrateTimesMutation.isPending}
-                        data-testid="button-fix-times"
-                        title="Backfill missing ticket times from ticket type"
-                      >
-                        {migrateTimesMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Timer className="h-3.5 w-3.5 mr-1" />}
-                        Fix Times
-                      </Button>
-                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => syncEventsMutation.mutate()}
+                      disabled={syncEventsMutation.isPending}
+                      data-testid="button-sync-events"
+                      title="Create missing events from Event Names by Date"
+                    >
+                      {syncEventsMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+                      Sync
+                    </Button>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -915,18 +874,6 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                                   >
                                     <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
                                   </Button>
-                                  {ev.ticketCount > 1 && (
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      title="Split event by ticket type"
-                                      onClick={() => splitEventMutation.mutate(ev.id)}
-                                      disabled={splitEventMutation.isPending}
-                                      data-testid={`button-split-event-${ev.id}`}
-                                    >
-                                      <Scissors className="h-3.5 w-3.5 text-muted-foreground" />
-                                    </Button>
-                                  )}
                                   {ev.ticketCount > 0 ? (
                                     <Button
                                       size="icon"

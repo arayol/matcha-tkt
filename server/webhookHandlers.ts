@@ -27,7 +27,7 @@ export class WebhookHandlers {
     const session = event.data.object as Stripe.Checkout.Session;
 
     console.log("\n" + "=".repeat(60));
-    console.log("💳 CHECKOUT SESSION COMPLETED");
+    console.log("💳 CHECKOUT SESSION COMPLETED - Marco M1");
     console.log("=".repeat(60));
 
     const customerName = session.customer_details?.name || "Guest";
@@ -63,7 +63,7 @@ export class WebhookHandlers {
         const product = item.price?.product as Stripe.Product | undefined;
         if (!product || typeof product !== "object") continue;
 
-        console.log("\n🎫 Product:", product.name, "| Stripe ID:", product.id);
+        console.log("\n🎫 Product:", product.name);
 
         let eventDate = "TBD";
         let eventTime = "TBD";
@@ -84,23 +84,23 @@ export class WebhookHandlers {
           console.log("  ⚠️ Name doesn't match expected pattern, using defaults");
         }
 
-        let dbEvent = await storage.getEventByStripeProductId(product.id);
-        if (dbEvent) {
-          console.log("  📦 Event found by Stripe product ID:", dbEvent.id);
-        } else {
-          const eventName = `${eventDate}, ${eventTime !== "TBD" ? eventTime + ", " : ""}${eventType}`;
+        // Find or create ONE parent event per date (not per product)
+        let dbEvent = await storage.getEventByDate(eventDate);
+        if (!dbEvent) {
           dbEvent = await storage.createEvent({
-            name: eventName,
+            name: eventDate,
             date: eventDate,
-            time: eventTime !== "TBD" ? eventTime : null,
-            eventType,
-            location: "TBD",
+            time: null,
+            eventType: "event",
+            location: "San Diego, CA",
             priceInCents: null,
-            stripeProductId: product.id,
+            stripeProductId: null,
             active: true,
             capacity: null,
           });
-          console.log("  📦 Event created:", dbEvent.id, "→", eventName);
+          console.log("  📦 Parent event created:", dbEvent.id, "→", eventDate);
+        } else {
+          console.log("  📦 Parent event found:", dbEvent.id, "→", eventDate);
         }
 
         if (eventDate !== "TBD") {
