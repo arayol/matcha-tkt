@@ -163,13 +163,13 @@ app.use((req, res, next) => {
   try {
     const { db } = await import("./db");
     const { events: eventsTable } = await import("@shared/schema");
-    const { eq, sql } = await import("drizzle-orm");
+    const { sql } = await import("drizzle-orm");
     await db.update(eventsTable)
       .set({ eventType: "Fever Pilates Class: Graziella" })
       .where(sql`${eventsTable.eventType} = 'Fever Pilates Class: Grazella'`);
     await db.update(eventsTable)
       .set({ eventType: "Sunset Boat Party", name: "Sunset Boat Party" })
-      .where(sql`${eventsTable.eventType} = 'event' AND ${eventsTable.date} = 'TBD'`);
+      .where(sql`(${eventsTable.eventType} = 'event' AND ${eventsTable.date} = 'TBD') OR ${eventsTable.name} = 'TBD'`);
   } catch (err) {
     console.log("⚠️ Data fix skipped:", err);
   }
