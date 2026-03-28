@@ -108,7 +108,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [mergeTargetId, setMergeTargetId] = useState<string>("");
   const [confirmDeleteEventId, setConfirmDeleteEventId] = useState<string | null>(null);
   const [showFixTimesDialog, setShowFixTimesDialog] = useState(false);
-  const [showFixAssignmentsDialog, setShowFixAssignmentsDialog] = useState(false);
+
   const [showSplitDialog, setShowSplitDialog] = useState(false);
   const [splitSourceEventId, setSplitSourceEventId] = useState<string | null>(null);
   const [splitSelectedTickets, setSplitSelectedTickets] = useState<Set<string>>(new Set());
@@ -233,17 +233,6 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       toast({ title: "Sync complete", description: msg });
     },
     onError: () => toast({ title: "Sync failed", variant: "destructive" }),
-  });
-
-  const fixAssignmentsMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/admin/fix-assignments", {}).then(r => r.json()),
-    onSuccess: async (result: { moved: number; log: string[] }) => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      await queryClient.invalidateQueries({ queryKey: ["/api/admin/reconciliation"] });
-      setShowFixAssignmentsDialog(false);
-      toast({ title: `${result.moved} tickets reassigned`, description: result.log.slice(0, 3).join("; ") + (result.log.length > 3 ? ` ...and ${result.log.length - 3} more` : "") });
-    },
-    onError: () => toast({ title: "Fix assignments failed", variant: "destructive" }),
   });
 
   const fixTimesMutation = useMutation({
@@ -818,16 +807,6 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setShowFixAssignmentsDialog(true)}
-                        data-testid="button-fix-assignments"
-                        title="Move tickets to the correct event based on ticket type"
-                      >
-                        <GitCompareArrows className="h-3.5 w-3.5 mr-1" />
-                        Fix Assignments
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
                         onClick={() => setShowFixTimesDialog(true)}
                         data-testid="button-fix-times"
                         title="Backfill class times on tickets"
@@ -1266,36 +1245,6 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                 <Send className="h-4 w-4 mr-1" />
               )}
               Send Tickets & Reconcile
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showFixAssignmentsDialog} onOpenChange={(open) => { if (!open) setShowFixAssignmentsDialog(false); }}>
-        <DialogContent className="max-w-md" data-testid="dialog-fix-assignments">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <GitCompareArrows className="h-5 w-5" />
-              Fix Ticket Assignments
-            </DialogTitle>
-            <DialogDescription>
-              This will move tickets to the correct event based on their class type.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 text-sm my-2">
-            <p>For each ticket, the system will check if there's a matching event (by class type) within the same date. If the ticket is currently in the wrong event, it will be moved.</p>
-            <p className="text-muted-foreground">Example: A "Fever Pilates: Graziella" ticket currently in the "GA Ticket Access" event will be moved to the "Fever Pilates: Graziella" event.</p>
-          </div>
-          <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">This action cannot be undone. Do you want to continue?</p>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowFixAssignmentsDialog(false)}>Cancel</Button>
-            <Button
-              onClick={() => fixAssignmentsMutation.mutate()}
-              disabled={fixAssignmentsMutation.isPending}
-              data-testid="button-confirm-fix-assignments"
-            >
-              {fixAssignmentsMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
-              Fix Assignments
             </Button>
           </DialogFooter>
         </DialogContent>

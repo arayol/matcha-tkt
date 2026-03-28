@@ -75,11 +75,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     try {
       const eventList = await storage.listEvents();
       const ticketList = await storage.listTickets();
-      const countMap = new Map<string, number>();
+      const countByType = new Map<string, number>();
       for (const t of ticketList) {
-        countMap.set(t.eventId, (countMap.get(t.eventId) || 0) + 1);
+        const key = (t.ticketType || "").toLowerCase();
+        countByType.set(key, (countByType.get(key) || 0) + 1);
       }
-      res.json(eventList.map(e => ({ ...e, ticketCount: countMap.get(e.id) || 0 })));
+      res.json(eventList.map(e => {
+        const eventTypeKey = (e.eventType || "").toLowerCase();
+        return { ...e, ticketCount: countByType.get(eventTypeKey) || 0 };
+      }));
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch events" });
     }
@@ -1048,55 +1052,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       res.json({ moved: ticketIds.length, targetEventId });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || "Move failed" });
-    }
-  });
-
-  app.post("/api/admin/fix-assignments", requireAdmin, async (_req, res) => {
-    try {
-      const { db } = await import("./db");
-      const { tickets: ticketsTable, events: eventsTable } = await import("@shared/schema");
-      const { eq } = await import("drizzle-orm");
-
-      const allTickets = await storage.listTickets();
-      const allEvents = await storage.listEvents();
-
-      const eventsByDate = new Map<string, typeof allEvents>();
-      for (const ev of allEvents) {
-        const list = eventsByDate.get(ev.date) || [];
-        list.push(ev);
-        eventsByDate.set(ev.date, list);
-      }
-
-      const log: string[] = [];
-      let moved = 0;
-
-      for (const ticket of allTickets) {
-        const currentEvent = allEvents.find(e => e.id === ticket.eventId);
-        if (!currentEvent) continue;
-
-        const sameDate = eventsByDate.get(currentEvent.date) || [];
-        if (sameDate.length <= 1) continue;
-
-        const correctEvent = sameDate.find(e => {
-          const et = (e.eventType || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-          const tt = (ticket.ticketType || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-          if (et === tt) return true;
-          if (et.includes(tt) || tt.includes(et)) return true;
-          const etShort = et.replace(/l+/g, "l").replace(/z+/g, "z");
-          const ttShort = tt.replace(/l+/g, "l").replace(/z+/g, "z");
-          return etShort === ttShort || etShort.includes(ttShort) || ttShort.includes(etShort);
-        });
-
-        if (correctEvent && correctEvent.id !== ticket.eventId) {
-          await db.update(ticketsTable).set({ eventId: correctEvent.id }).where(eq(ticketsTable.id, ticket.id));
-          log.push(`${ticket.billingName || ticket.purchaserName}: "${ticket.ticketType}" → ${correctEvent.name}`);
-          moved++;
-        }
-      }
-
-      res.json({ moved, log });
-    } catch (err: any) {
-      res.status(500).json({ error: err?.message || "Fix failed" });
     }
   });
 
