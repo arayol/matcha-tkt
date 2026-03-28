@@ -17,6 +17,8 @@ interface TicketData {
   purchasedAt: string;
   stripeSessionId: string | null;
   issuedBy: string | null;
+  eventName: string;
+  eventDate: string;
 }
 
 interface Stats {
@@ -47,10 +49,14 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
     const matchesFilter =
       activeFilter === "all" ||
       (activeFilter === "courtesy" ? !t.stripeSessionId : t.status === activeFilter);
+    const s = search.toLowerCase();
     const matchesSearch =
       !search ||
-      t.purchaserName.toLowerCase().includes(search.toLowerCase()) ||
-      t.purchaserEmail.toLowerCase().includes(search.toLowerCase());
+      t.purchaserName.toLowerCase().includes(s) ||
+      t.purchaserEmail.toLowerCase().includes(s) ||
+      t.ticketType.toLowerCase().includes(s) ||
+      t.eventName.toLowerCase().includes(s) ||
+      t.eventDate.toLowerCase().includes(s);
     return matchesFilter && matchesSearch;
   });
 
@@ -78,7 +84,7 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search by name or email..."
+                placeholder="Search by name, email, event, date, or class type..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none bg-muted/40 border border-card-border placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"

@@ -88,7 +88,13 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   app.get("/api/tickets", requireAdmin, async (_req, res) => {
     try {
       const ticketList = await storage.listTickets();
-      res.json(ticketList);
+      const allEvents = await storage.listEvents();
+      const eventMap = new Map(allEvents.map(e => [e.id, e]));
+      const enriched = ticketList.map(t => {
+        const ev = eventMap.get(t.eventId);
+        return { ...t, eventName: ev?.name || "", eventDate: ev?.date || "" };
+      });
+      res.json(enriched);
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch tickets" });
     }
