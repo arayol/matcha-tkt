@@ -31,10 +31,19 @@ interface ValidationResult {
   error?: string;
 }
 
+interface ClassBreakdown {
+  eventType: string;
+  displayName: string;
+  time: string;
+  total: number;
+  checkedIn: number;
+}
+
 interface ScannerStats {
   totalTickets: number;
   checkedIn: number;
   remaining: number;
+  classBreakdown: ClassBreakdown[];
   recentScans: {
     id: string;
     purchaserName: string;
@@ -186,7 +195,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
   const checkedIn = stats?.checkedIn ?? 0;
   const total = stats?.totalTickets ?? 0;
   const remaining = stats?.remaining ?? 0;
-  const progress = total > 0 ? (checkedIn / total) * 100 : 0;
+  const classBreakdown = stats?.classBreakdown ?? [];
 
   const filteredGuests = (stats?.guestList ?? []).filter((g) => {
     const matchesSearch =
@@ -202,22 +211,44 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
 
   const scannerContent = (
     <div className="flex flex-col min-h-[calc(100vh-140px)] md:min-h-0" data-testid="scanner-page">
-      <div className="px-4 py-2.5 border-b border-card-border rounded-t-3xl bg-card">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-medium text-muted-foreground">
-            {checkedIn} / {total} checked in
-          </span>
-          <span className="text-xs font-medium text-muted-foreground">
-            {remaining} remaining
-          </span>
-        </div>
-        <div className="h-2 rounded-full overflow-hidden bg-muted">
-          <div
-            className="h-full rounded-full bg-[#7a9956] transition-all duration-500"
-            style={{ width: `${progress}%` }}
-            data-testid="progress-bar"
-          />
-        </div>
+      <div className="px-4 py-3 border-b border-card-border rounded-t-3xl bg-card space-y-2" data-testid="class-progress-section">
+        {classBreakdown.length > 0 ? (
+          <>
+            {classBreakdown.map((cls) => {
+              const pct = cls.total > 0 ? (cls.checkedIn / cls.total) * 100 : 0;
+              return (
+                <div key={cls.eventType} data-testid={`class-progress-${cls.eventType}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-semibold truncate mr-2">
+                      {cls.displayName}
+                      {cls.time && <span className="text-muted-foreground font-normal ml-1">· {cls.time}</span>}
+                    </span>
+                    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                      {cls.checkedIn}/{cls.total}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden bg-muted">
+                    <div
+                      className="h-full rounded-full bg-[#7a9956] transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                      data-testid={`progress-bar-${cls.eventType}`}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex items-center justify-between pt-1 border-t border-card-border">
+              <span className="text-[11px] font-medium text-muted-foreground">
+                Total: {checkedIn} / {total} checked in
+              </span>
+              <span className="text-[11px] font-medium text-muted-foreground">
+                {total - checkedIn} remaining
+              </span>
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground text-center py-1">No events scheduled for today</p>
+        )}
       </div>
 
       <main className="flex-1 flex flex-col overflow-hidden">

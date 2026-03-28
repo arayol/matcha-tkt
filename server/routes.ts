@@ -276,11 +276,38 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   app.get("/api/scanner/stats", requireAuth, async (_req, res) => {
     try {
       const ticketList = await storage.listTickets();
-      const totalTickets = ticketList.filter(t => t.status !== "cancelled").length;
-      const checkedIn = ticketList.filter(t => t.status === "used").length;
-      const remaining = ticketList.filter(t => t.status === "valid").length;
+      const eventList = await storage.listEvents();
 
-      const recentScans = ticketList
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const now = new Date();
+      const day = now.getDate();
+      const suffix = day === 1 || day === 21 || day === 31 ? "st" : day === 2 || day === 22 ? "nd" : day === 3 || day === 23 ? "rd" : "th";
+      const todayStr = `${months[now.getMonth()]} ${day}${suffix}`;
+
+      const todayEvents = eventList.filter(e => e.date && e.date.includes(todayStr));
+      const todayEventIds = new Set(todayEvents.map(e => e.id));
+
+      const todayTickets = ticketList.filter(t =>
+        t.status !== "cancelled" && todayEventIds.has(t.eventId)
+      );
+
+      const totalTickets = todayTickets.length;
+      const checkedIn = todayTickets.filter(t => t.status === "used").length;
+      const remaining = todayTickets.filter(t => t.status === "valid").length;
+
+      const classBreakdown = todayEvents.map(ev => {
+        const classTickets = todayTickets.filter(t => t.eventId === ev.id);
+        const displayName = ev.eventType.replace(/^.*Class:\s*/i, "Class: ");
+        return {
+          eventType: ev.eventType,
+          displayName,
+          time: ev.time || "",
+          total: classTickets.length,
+          checkedIn: classTickets.filter(t => t.status === "used").length,
+        };
+      });
+
+      const recentScans = todayTickets
         .filter(t => t.status === "used" && t.usedAt)
         .sort((a, b) => new Date(b.usedAt!).getTime() - new Date(a.usedAt!).getTime())
         .slice(0, 20)
@@ -291,8 +318,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           usedAt: t.usedAt,
         }));
 
-      const guestList = ticketList
-        .filter(t => t.status !== "cancelled")
+      const guestList = todayTickets
         .map(t => ({
           id: t.id,
           purchaserName: t.purchaserName,
@@ -302,7 +328,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           usedAt: t.usedAt,
         }));
 
-      res.json({ totalTickets, checkedIn, remaining, recentScans, guestList });
+      res.json({ totalTickets, checkedIn, remaining, classBreakdown, recentScans, guestList });
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch scanner stats" });
     }
