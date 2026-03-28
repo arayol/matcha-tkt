@@ -32,6 +32,7 @@ interface ValidationResult {
 }
 
 interface ClassBreakdown {
+  eventId: string;
   eventType: string;
   displayName: string;
   time: string;
@@ -217,7 +218,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
             {classBreakdown.map((cls) => {
               const pct = cls.total > 0 ? (cls.checkedIn / cls.total) * 100 : 0;
               return (
-                <div key={cls.eventType} data-testid={`class-progress-${cls.eventType}`}>
+                <div key={cls.eventId} data-testid={`class-progress-${cls.eventId}`}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-semibold truncate mr-2">
                       {cls.displayName}
@@ -231,7 +232,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
                     <div
                       className="h-full rounded-full bg-[#7a9956] transition-all duration-500"
                       style={{ width: `${pct}%` }}
-                      data-testid={`progress-bar-${cls.eventType}`}
+                      data-testid={`progress-bar-${cls.eventId}`}
                     />
                   </div>
                 </div>

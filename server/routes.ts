@@ -299,6 +299,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         const classTickets = todayTickets.filter(t => t.eventId === ev.id);
         const displayName = ev.eventType.replace(/^.*Class:\s*/i, "Class: ");
         return {
+          eventId: ev.id,
           eventType: ev.eventType,
           displayName,
           time: ev.time || "",
