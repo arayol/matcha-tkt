@@ -285,10 +285,10 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const todayStr = `${months[now.getMonth()]} ${day}${suffix}`;
 
       const todayEvents = eventList.filter(e => e.date && e.date.includes(todayStr));
-      const todayEventIds = new Set(todayEvents.map(e => e.id));
+      const todayEventTypes = new Set(todayEvents.map(e => e.eventType.toLowerCase()));
 
       const todayTickets = ticketList.filter(t =>
-        t.status !== "cancelled" && todayEventIds.has(t.eventId)
+        t.status !== "cancelled" && todayEventTypes.has(t.ticketType.toLowerCase())
       );
 
       const totalTickets = todayTickets.length;
@@ -296,7 +296,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const remaining = todayTickets.filter(t => t.status === "valid").length;
 
       const classBreakdown = todayEvents.map(ev => {
-        const classTickets = todayTickets.filter(t => t.eventId === ev.id);
+        const classTickets = todayTickets.filter(t =>
+          t.ticketType.toLowerCase() === ev.eventType.toLowerCase()
+        );
         const displayName = ev.eventType.replace(/^.*Class:\s*/i, "Class: ");
         return {
           eventId: ev.id,
