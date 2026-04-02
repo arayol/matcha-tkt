@@ -88,7 +88,6 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filterType, setFilterType] = useState<string>("all");
   const [filterOrderType, setFilterOrderType] = useState<string>("all");
-  const [filterDate, setFilterDate] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ billingName: "", email: "", price: "", parsedTicketType: "" });
   const [newEventDate, setNewEventDate] = useState("");
@@ -316,7 +315,6 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const filtered = divergences.filter((d) => {
     if (filterType !== "all" && d.type !== filterType) return false;
     if (filterOrderType !== "all" && d.orderType !== filterOrderType) return false;
-    if (filterDate && d.eventDate && !d.eventDate.includes(filterDate)) return false;
     return true;
   });
 
@@ -571,14 +569,6 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                     <SelectItem value="expositor">Expositors</SelectItem>
                   </SelectContent>
                 </Select>
-                <Input
-                  type="text"
-                  placeholder="Filter by date..."
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  className="w-[160px]"
-                  data-testid="input-filter-date"
-                />
               </div>
             </Card>
 
@@ -822,38 +812,40 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                       Events
                       <Badge variant="secondary" className="ml-1">{eventsData?.length || 0}</Badge>
                     </CardTitle>
-                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setShowAddEventDialog(true)}
-                        data-testid="button-add-event"
-                        title="Add a new event manually"
-                      >
-                        <Plus className="h-3.5 w-3.5 mr-1" />
-                        Add Event
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setShowFixTimesDialog(true)}
-                        data-testid="button-fix-times"
-                        title="Backfill class times on tickets"
-                      >
-                        <Clock className="h-3.5 w-3.5 mr-1" />
-                        Fix Times
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => syncEventsMutation.mutate()}
-                        disabled={syncEventsMutation.isPending}
-                        data-testid="button-sync-events"
-                        title="Create missing events from Event Names by Date"
-                      >
-                        {syncEventsMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
-                        Sync
-                      </Button>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setShowAddEventDialog(true)}
+                          data-testid="button-add-event"
+                          title="Add a new event manually"
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1" />
+                          Add Event
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setShowFixTimesDialog(true)}
+                          data-testid="button-fix-times"
+                          title="Backfill class times on tickets"
+                        >
+                          <Clock className="h-3.5 w-3.5 mr-1" />
+                          Fix Times
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => syncEventsMutation.mutate()}
+                          disabled={syncEventsMutation.isPending}
+                          data-testid="button-sync-events"
+                          title="Create missing events from Event Names by Date"
+                        >
+                          {syncEventsMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+                          Sync
+                        </Button>
+                      </div>
                       <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${eventsCollapsed ? "" : "rotate-180"}`} />
                     </div>
                   </div>

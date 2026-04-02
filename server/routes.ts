@@ -71,7 +71,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     });
   });
 
-  app.get("/api/events", requireAuth, async (_req, res) => {
+  app.get("/api/events", requireAuth, async (req, res) => {
     try {
       const eventList = await storage.listEvents();
       const ticketList = await storage.listTickets();
@@ -80,7 +80,14 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         const key = (t.ticketType || "").toLowerCase();
         countByType.set(key, (countByType.get(key) || 0) + 1);
       }
-      res.json(eventList.map(e => {
+      const includeArchived = req.query.includeArchived === "true";
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const filtered = includeArchived ? eventList : eventList.filter(e => {
+        if (!e.calendarDate) return true;
+        return new Date(e.calendarDate) >= today;
+      });
+      res.json(filtered.map(e => {
         const eventTypeKey = (e.eventType || "").toLowerCase();
         return { ...e, ticketCount: countByType.get(eventTypeKey) || 0 };
       }));

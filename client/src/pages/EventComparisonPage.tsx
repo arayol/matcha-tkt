@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Users, Ticket, DollarSign, TrendingUp,
-  Table2, BarChart, Clock, Layers, Check, X,
+  Table2, BarChart, Check, X, ChevronDown,
 } from "lucide-react";
 import {
   BarChart as RechartsBarChart,
@@ -60,6 +60,7 @@ export default function EventComparisonPage({ dark, toggleTheme, onLogout, user 
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMonth, setFilterMonth] = useState<string>("all");
+  const [pickerCollapsed, setPickerCollapsed] = useState(false);
 
   const { data: comparison, isLoading } = useQuery<EventComparison[]>({
     queryKey: ["/api/admin/events/comparison"],
@@ -190,8 +191,16 @@ export default function EventComparisonPage({ dark, toggleTheme, onLogout, user 
 
             {events.length > 1 && (
               <Card className="p-4 md:p-5" data-testid="card-event-picker">
-                <p className="text-sm font-medium mb-3">Select events to compare</p>
-                <div className="space-y-3">
+                <button
+                  className="flex items-center justify-between w-full text-left mb-0"
+                  onClick={() => setPickerCollapsed(v => !v)}
+                  data-testid="button-toggle-picker"
+                >
+                  <p className="text-sm font-medium">Select events to compare</p>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${pickerCollapsed ? "" : "rotate-180"}`} />
+                </button>
+                {!pickerCollapsed && (
+                <div className="space-y-3 mt-3">
                   <div className="flex gap-2">
                     <Input
                       placeholder="Search event or type..."
@@ -264,6 +273,7 @@ export default function EventComparisonPage({ dark, toggleTheme, onLogout, user 
                     </div>
                   )}
                 </div>
+                )}
               </Card>
             )}
 
@@ -393,49 +403,6 @@ export default function EventComparisonPage({ dark, toggleTheme, onLogout, user 
                   )}
                 </Card>
 
-                {displayEvents.some(e => Object.keys(e.classBreakdown).length > 0) && (
-                  <Card className="p-4 md:p-6 lg:col-span-2" data-testid="chart-class-breakdown">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Layers className="h-5 w-5 text-primary" />
-                      <h3 className="font-semibold">Class Breakdown</h3>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {displayEvents.filter(e => Object.keys(e.classBreakdown).length > 0).map(e => (
-                        <div key={e.eventId} className="space-y-2">
-                          <p className="text-sm font-medium truncate">{e.eventName}</p>
-                          {Object.entries(e.classBreakdown).map(([cls, count]) => (
-                            <div key={cls} className="flex items-center justify-between gap-2 text-sm">
-                              <span className="text-muted-foreground truncate">{cls}</span>
-                              <Badge variant="secondary">{count}</Badge>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                )}
-
-                {displayEvents.some(e => Object.keys(e.timeBreakdown).length > 0) && (
-                  <Card className="p-4 md:p-6 lg:col-span-2" data-testid="chart-time-breakdown">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Clock className="h-5 w-5 text-chart-3" />
-                      <h3 className="font-semibold">Time Slot Breakdown</h3>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {displayEvents.filter(e => Object.keys(e.timeBreakdown).length > 0).map(e => (
-                        <div key={e.eventId} className="space-y-2">
-                          <p className="text-sm font-medium truncate">{e.eventName}</p>
-                          {Object.entries(e.timeBreakdown).map(([time, count]) => (
-                            <div key={time} className="flex items-center justify-between gap-2 text-sm">
-                              <span className="text-muted-foreground truncate">{time}</span>
-                              <Badge variant="secondary">{count}</Badge>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                )}
               </div>
             ) : (
               <Card className="overflow-x-auto" data-testid="table-comparison">
