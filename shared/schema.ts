@@ -30,6 +30,7 @@ export const events = pgTable("events", {
   priceInCents: integer("price_in_cents"),
   stripeProductId: text("stripe_product_id").unique(),
   active: boolean("active").default(true),
+  calendarDate: timestamp("calendar_date"),
 });
 
 export const insertEventSchema = createInsertSchema(events).omit({ id: true });

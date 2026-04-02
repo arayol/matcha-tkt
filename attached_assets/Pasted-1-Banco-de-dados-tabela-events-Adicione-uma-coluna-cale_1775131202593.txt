@@ -1,0 +1,47 @@
+1. Banco de dados – tabela events
+Adicione uma coluna calendar_date (formato timestamp) para armazenar a data real do evento.
+Isso facilitará a verificação de eventos passados vs. futuros, evitando confusões com o campo date atual (ex: "LA | May 2nd").
+
+⚠️ Se você não concordar com essa abordagem, me avise e sugira uma melhor forma de organizar as datas para comparação confiável.
+
+2. Página /reconciliation
+Dentro da box "Events", adicione um botão "Add Event".
+
+Esse botão deve abrir um formulário para criar um evento manualmente no banco de dados.
+
+O formulário deve conter os seguintes campos:
+
+text
+- name (ex: "LA | May 2nd, 11 AM - 1PM, GA Ticket Access")
+- date (ex: "LA | May 2nd")
+- time (ex: "11 AM - 1PM")
+- event_type (ex: "GA Ticket Access")
+- timestamp: 2026, May, 2 (novo campo no banco de dados)
+- location: Los Angeles
+- capacity:  (número)
+
+Regra importante: Quando o Stripe nos enviar a informação de um evento que já existe, o sistema deve preencher automaticamente o campo stripe_product_id na tabela events. Além disso, temos ter certeza e assegurar que a informações que chegou do stripe não duplique eventos (chegar similaridade das informações para que nao haja duplicação 
+
+
+3. Arquivação automática de eventos (frontend)
+Eventos cuja calendar_date (ou outra informação de data que você tenha), já passou não devem mais aparecer no frontend (exceto em seções específicas de arquivo, se houver).
+
+4. Página /reconciliation – ajustes de UI
+Remova a barra de busca.
+
+Adicione um sistema de collapse (iniciar fechado) nas seguintes caixas:
+
+- Event Names by Date
+- Events
+
+5. Página /tickets – arquivamento e filtros
+- Tickets de eventos que já aconteceram devem ser arquivados.
+- Na badge/aba "All", exiba apenas os tickets do próximo evento (futuro).
+- Adicione um badge/aba "Arquivados" para os tickets arquivados (visível em outra aba ou seção). Esses sao os ticket ussados e nao usados de eventos passados
+- Na mesma linha do formulário de busca, adicione um filtro por data que permita buscar tickets pela data de compra. A ordenação padrão deve ser: do mais novo para o mais antigo.
+
+6. Observações finais
+- Preserve as demais funcionalidades existentes. 
+- Use boas práticas de UX: collapses fechados, badges visíveis, campos de formulário claros.
+
+Qualquer dúvida sobre a implementação da data calendário, me consulte antes de seguir outro caminho.

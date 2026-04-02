@@ -94,9 +94,13 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const ticketList = await storage.listTickets();
       const allEvents = await storage.listEvents();
       const eventMap = new Map(allEvents.map(e => [e.id, e]));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       const enriched = ticketList.map(t => {
         const ev = eventMap.get(t.eventId);
-        return { ...t, eventName: ev?.name || "", eventDate: ev?.date || "" };
+        const calDate = ev?.calendarDate ? new Date(ev.calendarDate) : null;
+        const archived = calDate ? calDate < today : false;
+        return { ...t, eventName: ev?.name || "", eventDate: ev?.date || "", calendarDate: ev?.calendarDate || null, archived };
       });
       res.json(enriched);
     } catch (err) {
@@ -1228,6 +1232,34 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (err) {
       console.error("Customer recovery error:", err);
       res.status(500).json({ error: "Recovery failed" });
+    }
+  });
+
+  app.post("/api/admin/events", requireAdmin, async (req, res) => {
+    try {
+      const { name, date, time, eventType, location, capacity, calendarDate } = req.body;
+      if (!name || !date || !eventType) {
+        return res.status(400).json({ error: "name, date, and eventType are required" });
+      }
+      const existing = await storage.getEventByTypeAndDate(eventType, date);
+      if (existing) {
+        return res.status(409).json({ error: "An event with this type and date already exists" });
+      }
+      const event = await storage.createEvent({
+        name,
+        date,
+        time: time || null,
+        eventType,
+        location: location || "San Diego, CA",
+        capacity: capacity ? parseInt(capacity) : null,
+        priceInCents: null,
+        stripeProductId: null,
+        active: true,
+        calendarDate: calendarDate ? new Date(calendarDate) : null,
+      });
+      res.json(event);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to create event" });
     }
   });
 

@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   GitCompareArrows, AlertTriangle, CheckCircle2, XCircle,
   Download, Filter, Edit2, Check, X, Loader2, Calendar, Plus, Trash2, Send, MailCheck,
-  Upload, FileUp, FileSpreadsheet, RotateCcw, Archive, Scissors, Clock,
+  Upload, FileUp, FileSpreadsheet, RotateCcw, Archive, Scissors, Clock, ChevronDown,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -108,6 +108,10 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [mergeTargetId, setMergeTargetId] = useState<string>("");
   const [confirmDeleteEventId, setConfirmDeleteEventId] = useState<string | null>(null);
   const [showFixTimesDialog, setShowFixTimesDialog] = useState(false);
+  const [showAddEventDialog, setShowAddEventDialog] = useState(false);
+  const [addEventForm, setAddEventForm] = useState({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", calendarDate: "" });
+  const [eventsCollapsed, setEventsCollapsed] = useState(true);
+  const [eventNamesCollapsed, setEventNamesCollapsed] = useState(true);
 
   const [showSplitDialog, setShowSplitDialog] = useState(false);
   const [splitSourceEventId, setSplitSourceEventId] = useState<string | null>(null);
@@ -233,6 +237,18 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       toast({ title: "Sync complete", description: msg });
     },
     onError: () => toast({ title: "Sync failed", variant: "destructive" }),
+  });
+
+  const createEventMutation = useMutation({
+    mutationFn: (body: { name: string; date: string; time: string; eventType: string; location: string; capacity: string; calendarDate: string }) =>
+      apiRequest("POST", "/api/admin/events", body).then(r => r.json()),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      setShowAddEventDialog(false);
+      setAddEventForm({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", calendarDate: "" });
+      toast({ title: "Event created" });
+    },
+    onError: (err: any) => toast({ title: "Failed to create event", description: err?.message, variant: "destructive" }),
   });
 
   const fixTimesMutation = useMutation({
@@ -567,13 +583,16 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
             </Card>
 
             <Card data-testid="card-event-names">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-medium flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Event Names by Date
-                </CardTitle>
+              <CardHeader className="pb-3 cursor-pointer" onClick={() => setEventNamesCollapsed(v => !v)}>
+                <div className="flex items-center justify-between w-full">
+                  <CardTitle className="text-base font-medium flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Event Names by Date
+                  </CardTitle>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${eventNamesCollapsed ? "" : "rotate-180"}`} />
+                </div>
               </CardHeader>
-              <CardContent>
+              {!eventNamesCollapsed && (<CardContent>
                 <div className="space-y-3 mb-4">
                   <div className="flex flex-wrap items-end gap-3">
                     <div className="space-y-1">
@@ -791,19 +810,29 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                     )}
                   </div>
                 )}
-              </CardContent>
+              </CardContent>)}
             </Card>
 
-            {eventsData && eventsData.length > 0 && (
+            {eventsData && (
               <Card data-testid="card-events">
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 cursor-pointer" onClick={() => setEventsCollapsed(v => !v)}>
                   <div className="flex items-center justify-between w-full">
                     <CardTitle className="text-base font-medium flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
                       Events
-                      <Badge variant="secondary" className="ml-1">{eventsData.length}</Badge>
+                      <Badge variant="secondary" className="ml-1">{eventsData?.length || 0}</Badge>
                     </CardTitle>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowAddEventDialog(true)}
+                        data-testid="button-add-event"
+                        title="Add a new event manually"
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        Add Event
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
@@ -825,10 +854,11 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                         {syncEventsMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
                         Sync
                       </Button>
+                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${eventsCollapsed ? "" : "rotate-180"}`} />
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="p-0">
+                {!eventsCollapsed && (<CardContent className="p-0">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/40">
@@ -968,7 +998,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                       ))}
                     </tbody>
                   </table>
-                </CardContent>
+                </CardContent>)}
               </Card>
             )}
 
@@ -1245,6 +1275,67 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                 <Send className="h-4 w-4 mr-1" />
               )}
               Send Tickets & Reconcile
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAddEventDialog} onOpenChange={(open) => { if (!open) setShowAddEventDialog(false); }}>
+        <DialogContent className="max-w-lg" data-testid="dialog-add-event">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5" />
+              Add Event
+            </DialogTitle>
+            <DialogDescription>
+              Create a new event manually. When Stripe receives a matching purchase, it will link automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Name</label>
+              <Input placeholder="e.g. LA | May 2nd, 11 AM - 1PM, GA Ticket Access" value={addEventForm.name} onChange={e => setAddEventForm(f => ({ ...f, name: e.target.value }))} data-testid="input-add-event-name" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Date</label>
+                <Input placeholder="e.g. LA | May 2nd" value={addEventForm.date} onChange={e => setAddEventForm(f => ({ ...f, date: e.target.value }))} data-testid="input-add-event-date" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Time</label>
+                <Input placeholder="e.g. 11 AM - 1PM" value={addEventForm.time} onChange={e => setAddEventForm(f => ({ ...f, time: e.target.value }))} data-testid="input-add-event-time" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Event Type</label>
+                <Input placeholder="e.g. GA Ticket Access" value={addEventForm.eventType} onChange={e => setAddEventForm(f => ({ ...f, eventType: e.target.value }))} data-testid="input-add-event-type" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Calendar Date</label>
+                <Input type="date" value={addEventForm.calendarDate} onChange={e => setAddEventForm(f => ({ ...f, calendarDate: e.target.value }))} data-testid="input-add-event-calendar-date" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Location</label>
+                <Input placeholder="e.g. Los Angeles" value={addEventForm.location} onChange={e => setAddEventForm(f => ({ ...f, location: e.target.value }))} data-testid="input-add-event-location" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Capacity</label>
+                <Input type="number" placeholder="e.g. 50" value={addEventForm.capacity} onChange={e => setAddEventForm(f => ({ ...f, capacity: e.target.value }))} data-testid="input-add-event-capacity" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowAddEventDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => createEventMutation.mutate(addEventForm)}
+              disabled={!addEventForm.name || !addEventForm.date || !addEventForm.eventType || createEventMutation.isPending}
+              data-testid="button-confirm-add-event"
+            >
+              {createEventMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+              Create Event
             </Button>
           </DialogFooter>
         </DialogContent>

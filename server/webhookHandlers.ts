@@ -84,23 +84,27 @@ export class WebhookHandlers {
           console.log("  ⚠️ Name doesn't match expected pattern, using defaults");
         }
 
-        // Find or create ONE parent event per date (not per product)
-        let dbEvent = await storage.getEventByDate(eventDate);
+        let dbEvent = await storage.getEventByTypeAndDate(eventType, eventDate);
         if (!dbEvent) {
           dbEvent = await storage.createEvent({
-            name: eventDate,
+            name: product.name,
             date: eventDate,
-            time: null,
-            eventType: "event",
+            time: eventTime !== "TBD" ? eventTime : null,
+            eventType,
             location: "San Diego, CA",
             priceInCents: null,
-            stripeProductId: null,
+            stripeProductId: product.id,
             active: true,
             capacity: null,
+            calendarDate: null,
           });
-          console.log("  📦 Parent event created:", dbEvent.id, "→", eventDate);
+          console.log("  📦 Event created:", dbEvent.id, "→", product.name);
         } else {
-          console.log("  📦 Parent event found:", dbEvent.id, "→", eventDate);
+          if (!dbEvent.stripeProductId && product.id) {
+            await storage.updateEvent(dbEvent.id, { stripeProductId: product.id });
+            console.log("  🔗 Linked stripeProductId to existing event:", dbEvent.id);
+          }
+          console.log("  📦 Event found:", dbEvent.id, "→", dbEvent.name);
         }
 
         if (eventDate !== "TBD") {
