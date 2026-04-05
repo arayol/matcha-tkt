@@ -154,10 +154,14 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         resolvedEvent = activeEvent;
       } else {
         const currentEvent = await storage.getEvent(ticket.eventId);
-        if (currentEvent) {
-          const cleared = await storage.updateEvent(currentEvent.id, { calendarDate: null });
-          resolvedEvent = cleared ?? currentEvent;
+        if (!currentEvent) {
+          return res.status(404).json({ error: "Linked event not found; cannot reactivate ticket" });
         }
+        const cleared = await storage.updateEvent(currentEvent.id, { calendarDate: null });
+        if (!cleared) {
+          return res.status(500).json({ error: "Failed to clear event date; reactivation aborted" });
+        }
+        resolvedEvent = cleared;
       }
 
       const updatedTicket = await storage.getTicket(ticket.id);
