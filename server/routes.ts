@@ -134,6 +134,12 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
+      const ticketEvent = allEvents.find(e => e.id === ticket.eventId);
+      const isArchived = ticketEvent?.calendarDate ? new Date(ticketEvent.calendarDate) < today : false;
+      if (!isArchived) {
+        return res.status(400).json({ error: "Ticket is not archived" });
+      }
+
       const activeEvent = allEvents.find(e => {
         const sameType = (e.eventType || "").toLowerCase() === (ticket.ticketType || "").toLowerCase();
         if (!sameType) return false;
