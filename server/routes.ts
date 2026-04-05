@@ -125,6 +125,55 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  app.post("/api/admin/tickets/:id/reactivate", requireAdmin, async (req, res) => {
+    try {
+      const ticket = await storage.getTicket(req.params.id);
+      if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+      const allEvents = await storage.listEvents();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const activeEvent = allEvents.find(e => {
+        const sameType = (e.eventType || "").toLowerCase() === (ticket.ticketType || "").toLowerCase();
+        if (!sameType) return false;
+        if (!e.calendarDate) return true;
+        return new Date(e.calendarDate) >= today;
+      });
+
+      if (activeEvent) {
+        await storage.updateTicketEventId(ticket.id, activeEvent.id);
+      } else {
+        const currentEvent = await storage.getEvent(ticket.eventId);
+        if (currentEvent) {
+          await storage.updateEvent(currentEvent.id, { calendarDate: null } as any);
+        }
+      }
+
+      const updatedTicket = await storage.getTicket(ticket.id);
+      const eventMap = new Map(allEvents.map(e => [e.id, e]));
+
+      const resolvedEventId = activeEvent ? activeEvent.id : ticket.eventId;
+      let resolvedEvent = activeEvent || eventMap.get(ticket.eventId);
+      if (!activeEvent) {
+        resolvedEvent = await storage.getEvent(ticket.eventId) || undefined;
+      }
+
+      const enriched = {
+        ...updatedTicket,
+        eventName: resolvedEvent?.name || "",
+        eventDate: resolvedEvent?.date || "",
+        calendarDate: resolvedEvent?.calendarDate || null,
+        archived: false,
+      };
+
+      res.json({ message: "Ticket reactivated", ticket: enriched });
+    } catch (err) {
+      console.error("Reactivate ticket error:", err);
+      res.status(500).json({ error: "Failed to reactivate ticket" });
+    }
+  });
+
   app.get("/api/ticket/:urlSlug", async (req, res) => {
     try {
       const ticket = await storage.getTicketByUrl(req.params.urlSlug);

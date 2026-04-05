@@ -1,10 +1,12 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Search, CheckCircle2, Circle, XCircle,
-  ExternalLink, Ticket, Archive, CalendarDays,
+  ExternalLink, Ticket, Archive, CalendarDays, RotateCcw, Loader2,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface TicketData {
   id: string;
@@ -37,6 +39,26 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const { toast } = useToast();
+
+  const [reactivatingIds, setReactivatingIds] = useState<Set<string>>(new Set());
+
+  const reactivateMutation = useMutation({
+    mutationFn: async (ticketId: string) => {
+      setReactivatingIds(prev => new Set(prev).add(ticketId));
+      const res = await apiRequest("POST", `/api/admin/tickets/${ticketId}/reactivate`);
+      return res.json();
+    },
+    onSuccess: (_data, ticketId) => {
+      setReactivatingIds(prev => { const s = new Set(prev); s.delete(ticketId); return s; });
+      queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
+      toast({ title: "Ticket reactivated", description: "The ticket has been moved back to active." });
+    },
+    onError: (_err, ticketId) => {
+      setReactivatingIds(prev => { const s = new Set(prev); s.delete(ticketId); return s; });
+      toast({ title: "Failed to reactivate", description: "Could not reactivate the ticket.", variant: "destructive" });
+    },
+  });
 
   const { data: ticketList } = useQuery<TicketData[]>({ queryKey: ["/api/tickets"] });
   const upcomingTickets = useMemo(() => (ticketList || []).filter(t => !t.archived), [ticketList]);
@@ -208,6 +230,19 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                         {ticket.purchasedAt ? new Date(ticket.purchasedAt).toLocaleDateString() : ""}
                       </p>
                     </div>
+                    {activeFilter === "archived" && (
+                      <button
+                        onClick={() => reactivateMutation.mutate(ticket.id)}
+                        disabled={reactivatingIds.has(ticket.id)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Reactivate ticket"
+                        data-testid={`button-reactivate-${ticket.id}`}
+                      >
+                        {reactivatingIds.has(ticket.id)
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <RotateCcw className="h-3.5 w-3.5" />}
+                      </button>
+                    )}
                     <a
                       href={`/ticket/${ticket.ticketUrl}`}
                       target="_blank"
