@@ -141,23 +141,20 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         return new Date(e.calendarDate) >= today;
       });
 
+      let resolvedEvent: typeof allEvents[number] | undefined;
+
       if (activeEvent) {
         await storage.updateTicketEventId(ticket.id, activeEvent.id);
+        resolvedEvent = activeEvent;
       } else {
         const currentEvent = await storage.getEvent(ticket.eventId);
         if (currentEvent) {
-          await storage.updateEvent(currentEvent.id, { calendarDate: null } as any);
+          const cleared = await storage.updateEvent(currentEvent.id, { calendarDate: null });
+          resolvedEvent = cleared ?? currentEvent;
         }
       }
 
       const updatedTicket = await storage.getTicket(ticket.id);
-      const eventMap = new Map(allEvents.map(e => [e.id, e]));
-
-      const resolvedEventId = activeEvent ? activeEvent.id : ticket.eventId;
-      let resolvedEvent = activeEvent || eventMap.get(ticket.eventId);
-      if (!activeEvent) {
-        resolvedEvent = await storage.getEvent(ticket.eventId) || undefined;
-      }
 
       const enriched = {
         ...updatedTicket,
@@ -167,7 +164,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         archived: false,
       };
 
-      res.json({ message: "Ticket reactivated", ticket: enriched });
+      res.json(enriched);
     } catch (err) {
       console.error("Reactivate ticket error:", err);
       res.status(500).json({ error: "Failed to reactivate ticket" });
