@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Search, CheckCircle2, Circle, XCircle,
-  ExternalLink, Ticket, Archive, CalendarDays, RotateCcw, Loader2,
+  ExternalLink, Ticket, Archive, CalendarDays, RotateCcw, Loader2, Ban,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -42,6 +42,8 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
   const { toast } = useToast();
 
   const [reactivatingIds, setReactivatingIds] = useState<Set<string>>(new Set());
+  const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
+  const [confirmCancelTicket, setConfirmCancelTicket] = useState<TicketData | null>(null);
 
   const reactivateMutation = useMutation({
     mutationFn: async (ticketId: string) => {
@@ -57,6 +59,23 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
     onError: (_err, ticketId) => {
       setReactivatingIds(prev => { const s = new Set(prev); s.delete(ticketId); return s; });
       toast({ title: "Failed to reactivate", description: "Could not reactivate the ticket.", variant: "destructive" });
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async (ticketId: string) => {
+      setCancellingIds(prev => new Set(prev).add(ticketId));
+      const res = await apiRequest("POST", `/api/admin/tickets/${ticketId}/cancel`);
+      return res.json();
+    },
+    onSuccess: (_data, ticketId) => {
+      setCancellingIds(prev => { const s = new Set(prev); s.delete(ticketId); return s; });
+      queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
+      toast({ title: "Ticket cancelled", description: "The ticket has been cancelled." });
+    },
+    onError: (_err, ticketId) => {
+      setCancellingIds(prev => { const s = new Set(prev); s.delete(ticketId); return s; });
+      toast({ title: "Failed to cancel", description: "Could not cancel the ticket.", variant: "destructive" });
     },
   });
 
@@ -243,6 +262,19 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                           : <RotateCcw className="h-3.5 w-3.5" />}
                       </button>
                     )}
+                    {ticket.status !== "cancelled" && ticket.status !== "used" && (
+                      <button
+                        onClick={() => setConfirmCancelTicket(ticket)}
+                        disabled={cancellingIds.has(ticket.id)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Cancel ticket"
+                        data-testid={`button-cancel-${ticket.id}`}
+                      >
+                        {cancellingIds.has(ticket.id)
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <Ban className="h-3.5 w-3.5" />}
+                      </button>
+                    )}
                     <a
                       href={`/ticket/${ticket.ticketUrl}`}
                       target="_blank"
@@ -259,6 +291,53 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
           </div>
         </div>
       </div>
+
+      {confirmCancelTicket && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => setConfirmCancelTicket(null)}
+          data-testid="modal-cancel-confirm"
+        >
+          <div
+            className="bg-card border border-card-border rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-500 dark:bg-red-950/30 flex-shrink-0">
+                <Ban className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">Cancel ticket?</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">This action is irreversible.</p>
+              </div>
+            </div>
+            <div className="rounded-xl bg-muted/40 border border-card-border px-4 py-3 space-y-1">
+              <p className="text-sm font-medium">{confirmCancelTicket.purchaserName}</p>
+              <p className="text-xs text-muted-foreground">{confirmCancelTicket.purchaserEmail}</p>
+              <p className="text-xs text-muted-foreground">{confirmCancelTicket.ticketType}</p>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setConfirmCancelTicket(null)}
+                className="flex-1 px-4 py-2 rounded-xl text-sm font-medium bg-muted/50 hover:bg-muted/70 transition-colors"
+                data-testid="button-cancel-dismiss"
+              >
+                Keep ticket
+              </button>
+              <button
+                onClick={() => {
+                  cancelMutation.mutate(confirmCancelTicket.id);
+                  setConfirmCancelTicket(null);
+                }}
+                className="flex-1 px-4 py-2 rounded-xl text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+                data-testid="button-cancel-confirm"
+              >
+                Cancel ticket
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }
