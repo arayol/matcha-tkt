@@ -2,8 +2,9 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Search, CheckCircle2, Circle, XCircle,
-  ExternalLink, Ticket, Archive, CalendarDays, RotateCcw, Loader2, Ban,
+  ExternalLink, Ticket, Archive, CalendarDays, RotateCcw, Loader2,
 } from "lucide-react";
+import deleteTicketIcon from "@assets/delete-ticket-32_1775730162676.ico";
 import AppLayout from "@/components/AppLayout";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -266,13 +267,13 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                       <button
                         onClick={() => setConfirmCancelTicket(ticket)}
                         disabled={cancellingIds.has(ticket.id)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Cancel ticket"
                         data-testid={`button-cancel-${ticket.id}`}
                       >
                         {cancellingIds.has(ticket.id)
-                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          : <Ban className="h-3.5 w-3.5" />}
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin text-red-500" />
+                          : <img src={deleteTicketIcon} alt="Cancel" className="h-4 w-4" />}
                       </button>
                     )}
                     <a
@@ -303,8 +304,8 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-500 dark:bg-red-950/30 flex-shrink-0">
-                <Ban className="h-5 w-5" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 dark:bg-red-950/30 flex-shrink-0">
+                <img src={deleteTicketIcon} alt="Cancel" className="h-5 w-5" />
               </div>
               <div>
                 <h3 className="text-sm font-semibold">Cancel ticket?</h3>
