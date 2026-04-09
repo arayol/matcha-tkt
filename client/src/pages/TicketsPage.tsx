@@ -4,7 +4,7 @@ import {
   Search, CheckCircle2, Circle, XCircle,
   ExternalLink, Ticket, Archive, CalendarDays, RotateCcw, Loader2,
 } from "lucide-react";
-import deleteTicketIcon from "@assets/delete-ticket-32_1775730162676.ico";
+import deleteTicketIcon from "@assets/delete-ticket-32_1775730554904.png";
 import AppLayout from "@/components/AppLayout";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
