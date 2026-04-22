@@ -225,8 +225,8 @@ function buildTicketEmailHtml(params: {
     }
 
     .header img.logo {
-      width: 440px;
-      max-width: 200%;
+      width: 300px;
+      max-width: 100%;
       position: relative;
       z-index: 1;
     }
@@ -490,6 +490,25 @@ function buildTicketEmailHtml(params: {
       height: 1px;
       background: rgba(148,167,121,0.3);
       margin: 16px auto;
+    }
+
+    @media only screen and (max-width: 600px) {
+      .email-wrapper { padding: 16px 0 !important; }
+      .email-container { width: 100% !important; border-radius: 0 !important; }
+      .header { padding: 32px 20px 28px !important; }
+      .hero-band { padding: 24px 20px !important; }
+      .hero-band h1 { font-size: 30px !important; }
+      .body-content { padding: 32px 20px 0 !important; }
+      .ticket-header { padding: 20px 16px 16px !important; }
+      .event-title-ticket { font-size: 20px !important; }
+      .ticket-details { padding: 16px !important; display: block !important; }
+      .detail-col { display: block !important; width: 100% !important; padding: 8px 0 !important; border-bottom: 1px solid rgba(255,255,255,0.07); }
+      .detail-col:last-child { border-bottom: none; }
+      .ticket-footer { padding: 14px 16px !important; display: block !important; }
+      .ticket-footer-inner { display: block !important; }
+      .instructions { margin-bottom: 24px !important; }
+      .footer { padding: 28px 20px !important; }
+      .footer img.logo-footer { width: 160px !important; }
     }
   </style>
 </head>
