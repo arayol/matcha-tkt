@@ -186,10 +186,11 @@ function buildTicketEmailHtml(params: {
 
     .email-wrapper {
       background-color: #f0ede6;
-      padding: 40px 20px;
+      padding: 5% 3%;
     }
 
     .email-container {
+      width: 100%;
       max-width: 600px;
       margin: 0 auto;
       background-color: #faf9f6;
@@ -200,7 +201,7 @@ function buildTicketEmailHtml(params: {
 
     .header {
       background-color: #352d17;
-      padding: 48px 48px 40px;
+      padding: 8% 8% 7%;
       text-align: center;
       position: relative;
       overflow: hidden;
@@ -225,8 +226,9 @@ function buildTicketEmailHtml(params: {
     }
 
     .header img.logo {
-      width: 300px;
-      max-width: 100%;
+      width: 55%;
+      max-width: 280px;
+      min-width: 140px;
       position: relative;
       z-index: 1;
     }
@@ -240,7 +242,7 @@ function buildTicketEmailHtml(params: {
 
     .hero-band {
       background: linear-gradient(135deg, #94a779 0%, #7a8f63 100%);
-      padding: 32px 48px;
+      padding: 5% 8%;
       text-align: center;
     }
 
@@ -270,7 +272,7 @@ function buildTicketEmailHtml(params: {
 
 
     .body-content {
-      padding: 48px 48px 0;
+      padding: 7% 8% 0;
       text-align: center;
     }
 
@@ -314,7 +316,7 @@ function buildTicketEmailHtml(params: {
     }
 
     .ticket-header {
-      padding: 28px 32px 20px;
+      padding: 5% 6% 4%;
       border-bottom: 1px dashed rgba(255,255,255,0.1);
       text-align: center;
     }
@@ -344,7 +346,7 @@ function buildTicketEmailHtml(params: {
     }
 
     .ticket-details {
-      padding: 24px 32px;
+      padding: 4% 6%;
       display: table;
       width: 100%;
     }
@@ -352,7 +354,7 @@ function buildTicketEmailHtml(params: {
     .detail-col {
       display: table-cell;
       width: 33.33%;
-      padding-right: 16px;
+      padding-right: 3%;
       vertical-align: top;
       text-align: center;
     }
@@ -378,7 +380,7 @@ function buildTicketEmailHtml(params: {
 
     .ticket-footer {
       background: rgba(0,0,0,0.2);
-      padding: 16px 32px;
+      padding: 3% 6%;
       display: table;
       width: 100%;
     }
@@ -463,12 +465,14 @@ function buildTicketEmailHtml(params: {
 
     .footer {
       background: #352d17;
-      padding: 36px 48px;
+      padding: 6% 8%;
       text-align: center;
     }
 
     .footer img.logo-footer {
-      width: 220px;
+      width: 40%;
+      max-width: 220px;
+      min-width: 120px;
       opacity: 0.7;
       margin-bottom: 20px;
     }
@@ -492,23 +496,20 @@ function buildTicketEmailHtml(params: {
       margin: 16px auto;
     }
 
-    @media only screen and (max-width: 600px) {
-      .email-wrapper { padding: 16px 0 !important; }
-      .email-container { width: 100% !important; border-radius: 0 !important; }
-      .header { padding: 32px 20px 28px !important; }
-      .hero-band { padding: 24px 20px !important; }
-      .hero-band h1 { font-size: 30px !important; }
-      .body-content { padding: 32px 20px 0 !important; }
-      .ticket-header { padding: 20px 16px 16px !important; }
-      .event-title-ticket { font-size: 20px !important; }
-      .ticket-details { padding: 16px !important; display: block !important; }
-      .detail-col { display: block !important; width: 100% !important; padding: 8px 0 !important; border-bottom: 1px solid rgba(255,255,255,0.07); }
-      .detail-col:last-child { border-bottom: none; }
-      .ticket-footer { padding: 14px 16px !important; display: block !important; }
+    @media only screen and (max-width: 480px) {
+      .email-wrapper { padding: 0 !important; }
+      .email-container { border-radius: 0 !important; }
+      .hero-band h1 { font-size: 28px !important; }
+      .ticket-details { display: block !important; }
+      .detail-col {
+        display: block !important;
+        width: 100% !important;
+        padding: 6px 0 !important;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+      }
+      .detail-col:last-child { border-bottom: none !important; }
+      .ticket-footer { display: block !important; }
       .ticket-footer-inner { display: block !important; }
-      .instructions { margin-bottom: 24px !important; }
-      .footer { padding: 28px 20px !important; }
-      .footer img.logo-footer { width: 160px !important; }
     }
   </style>
 </head>
