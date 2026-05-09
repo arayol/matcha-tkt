@@ -1,6 +1,6 @@
-# 🍵❄️ Matcha On Ice - Sistema de Gestão de Ingressos
+# Matcha On Ice - Sistema de Gestão de Ingressos
 
-  > 🚀 **Modo: PRODUÇÃO** | Marco T0 - Validação Técnica
+  > **Modo: PRODUÇÃO** | Marco T0 - Validação Técnica
 
   Sistema completo de gestão de ingressos para eventos de fitness com integração Stripe, QR codes, dashboard administrativo e app mobile de validação.
 
