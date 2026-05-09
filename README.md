@@ -10,7 +10,7 @@
   - ✅ Credenciais gerenciadas automaticamente de forma segura
   - ⚠️ Aguardando configuração do STRIPE_WEBHOOK_SECRET
 
-  ## 🚀 Quick Start - Produção
+  ## Quick Start - Produção
 
   ### 1. Configure o Webhook Secret
   ```bash
