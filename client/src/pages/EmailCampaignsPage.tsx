@@ -604,7 +604,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
                 data-testid="button-attach-pdf"
               >
                 <Paperclip className="h-4 w-4" />
-                Attach PDF presentation deck (required)
+                Attach PDF presentation deck
               </button>
             )}
           </div>
