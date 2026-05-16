@@ -138,28 +138,5 @@
   - 🔗 [Stripe Webhooks](https://stripe.com/docs/webhooks)
   - 🔗 [Checkout Session API](https://stripe.com/docs/api/checkout/sessions)
 
-  ## ⏱️ Cronograma Estimado
 
-  - **T0** - Validação Técnica: Configuração ⬅️ **VOCÊ ESTÁ AQUI**
-  - **M1** - Backend Core: 1-2 semanas
-  - **M2** - Integração Stripe: 1-2 semanas
-  - **M3** - Sistema de Ingressos: 1-2 semanas
-  - **M4** - Dashboard Admin: 1-2 semanas
-  - **M5** - Sistema de Emails: 1-1.5 semanas
-  - **M6** - App Mobile: 1-2 semanas
-  - **M7** - Testes e Go-Live: 1 semana
-
-  **Total estimado:** 8.5-12.5 semanas
-
-  ## 🆘 Suporte
-
-  Em caso de dúvidas ou problemas:
-  1. Verifique o [Guia de Produção](PRODUCTION.md)
-  2. Consulte os logs no console do Replit
-  3. Verifique a configuração do webhook no Stripe Dashboard
-
-  ---
-
-  💚 **Desenvolvido para Matcha On Ice** - San Diego, CA
-  🚀 **Status:** Produção - Marco T0
   
