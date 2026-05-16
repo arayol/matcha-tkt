@@ -101,23 +101,14 @@ async function processCampaignSends(campaignId: string) {
   const attachment = loadCampaignAttachment(campaignId);
   await storage.updateEmailCampaign(campaignId, { status: "sending", startedAt: new Date() });
   const recipients = await storage.listCampaignRecipients(campaignId);
-  if (!attachment?.buffer || !attachment.filename) {
-    for (const r of recipients) {
-      if (r.status === "pending" || r.status === "failed") {
-        await storage.updateCampaignRecipient(r.id, { status: "failed", error: "PDF attachment unavailable — re-attach the deck and retry" });
-      }
-    }
-    const failedNow = await storage.countCampaignRecipientsByStatus(campaignId, "failed");
-    await storage.updateEmailCampaign(campaignId, { status: "completed", failedCount: failedNow, completedAt: new Date() });
-    return;
-  }
   for (const r of recipients) {
     if (r.status !== "pending" && r.status !== "failed") continue;
     try {
       const sendResult = await sendCampaignEmail({
         to: r.email, name: r.name, subject: meta.subject, body: meta.body,
         senderName: meta.senderName, replyTo: meta.replyTo,
-        pdfBuffer: attachment.buffer, pdfFilename: attachment.filename,
+        pdfBuffer: attachment?.buffer,
+        pdfFilename: attachment?.filename,
       });
       await storage.updateCampaignRecipient(r.id, { status: "sent", sentAt: new Date(), error: null, messageId: sendResult.messageIdHeader, threadId: sendResult.threadId });
     } catch (err: any) {
@@ -1708,7 +1699,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const { subject, body, senderName, replyTo, testEmail } = req.body as Record<string, string>;
       if (!testEmail) return res.status(400).json({ error: "testEmail required" });
       if (!subject) return res.status(400).json({ error: "subject required" });
-      if (!req.file) return res.status(400).json({ error: "PDF attachment required for test send" });
       await sendCampaignEmail({
         to: testEmail,
         name: "Test Recipient",
@@ -1716,8 +1706,8 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         body: body || "",
         senderName: senderName || "Matcha On Ice Team",
         replyTo: replyTo || "hello@matchaonice.com",
-        pdfBuffer: req.file.buffer,
-        pdfFilename: req.file.originalname,
+        pdfBuffer: req.file?.buffer,
+        pdfFilename: req.file?.originalname,
       });
       res.json({ ok: true });
     } catch (err: any) {
@@ -1745,10 +1735,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         if (existing.status !== "draft") {
           return res.status(409).json({ error: `Campaign already has status "${existing.status}"` });
         }
-        if (!req.file) {
-          const existingAttachment = loadCampaignAttachment(id);
-          if (!existingAttachment) return res.status(400).json({ error: "PDF attachment required" });
-        }
         campaign = await storage.updateEmailCampaign(id, {
           subject, body,
           senderName: senderName || "Matcha On Ice Team",
@@ -1767,18 +1753,17 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           );
         }
       } else {
-        if (!req.file) return res.status(400).json({ error: "PDF attachment required" });
         campaign = await storage.createEmailCampaign({
           senderName: senderName || "Matcha On Ice Team",
           replyTo: replyTo || "hello@matchaonice.com",
           subject, body,
-          attachmentFilename: req.file.originalname,
-          attachmentSize: req.file.size,
+          attachmentFilename: req.file?.originalname || null,
+          attachmentSize: req.file?.size || null,
           totalRecipients: parsed.length,
           status: "queued",
           createdBy: user?.username || null,
         });
-        saveCampaignAttachment(campaign.id, req.file.buffer, req.file.originalname);
+        if (req.file) saveCampaignAttachment(campaign.id, req.file.buffer, req.file.originalname);
         await storage.bulkCreateCampaignRecipients(
           parsed.map((c) => ({ campaignId: campaign!.id, name: c.name, email: c.email, status: "pending" })),
         );

@@ -362,14 +362,13 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
     mutationFn: async () => {
       if (validContacts.length === 0) throw new Error("Import contacts first");
       if (!subject.trim() || !body.trim()) throw new Error("Subject and body are required");
-      if (!pdfFile) throw new Error("Attach a PDF presentation deck before sending");
       const fd = new FormData();
       fd.append("subject", subject);
       fd.append("body", body);
       fd.append("senderName", senderName);
       fd.append("replyTo", replyTo);
       fd.append("contacts", JSON.stringify(validContacts.map((c) => ({ name: c.name, email: c.email }))));
-      fd.append("attachment", pdfFile);
+      if (pdfFile) fd.append("attachment", pdfFile);
       const res = await fetch("/api/admin/email-campaigns/send", {
         method: "POST", credentials: "include", body: fd,
       });
@@ -437,12 +436,11 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
   const failedRecipients = activeDetail?.recipients.filter((r) => r.status === "failed") ?? [];
   const showProgress = !!activeDetail;
 
-  // Send button gating: contacts imported + body + subject + PDF attached
+  // Send button gating: contacts imported + body + subject (PDF optional)
   const canSend =
     validContacts.length > 0 &&
     !!subject.trim() &&
     !!body.trim() &&
-    !!pdfFile &&
     effectiveContactsImported;
 
   const sendDisabledReason = !subject.trim()
@@ -453,9 +451,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
         ? contactsMode === "saved" ? "Pick at least one saved contact" : "Upload contacts"
         : !effectiveContactsImported
           ? "Confirm import to enable sending"
-          : !pdfFile
-            ? "Attach the PDF deck"
-            : "";
+          : "";
 
   return (
     <AppLayout dark={dark} toggleTheme={toggleTheme} onLogout={onLogout} user={user} activePath="/admin/email-campaigns" data-testid="email-campaigns-page">
@@ -794,8 +790,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
               />
               <Button
                 variant="outline" onClick={() => testSendMutation.mutate()}
-                disabled={testSendMutation.isPending || !testEmail || !subject || !body || !pdfFile}
-                title={!pdfFile ? "Attach the PDF deck first" : undefined}
+                disabled={testSendMutation.isPending || !testEmail || !subject || !body}
                 data-testid="button-send-test"
               >
                 {testSendMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
