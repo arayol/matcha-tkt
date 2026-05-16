@@ -120,7 +120,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
   const [draftId, setDraftId] = useState<string | null>(null);
   const [confirmSendOpen, setConfirmSendOpen] = useState(false);
   const [senderName, setSenderName] = useState("Matcha On Ice Team");
-  const [replyTo, setReplyTo] = useState("hello@matchaonice.com");
+  const [replyTo, setReplyTo] = useState("contact@matchaonice.com");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
 

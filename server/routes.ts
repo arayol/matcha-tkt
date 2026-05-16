@@ -1620,7 +1620,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           subject: subject || "",
           body: body || "",
           senderName: senderName || "Matcha On Ice Team",
-          replyTo: replyTo || "hello@matchaonice.com",
+          replyTo: replyTo || "contact@matchaonice.com",
           attachmentFilename: req.file?.originalname || undefined,
           attachmentSize: req.file?.size || undefined,
           totalRecipients: parsed.length || undefined,
@@ -1630,7 +1630,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       } else {
         campaign = await storage.createEmailCampaign({
           senderName: senderName || "Matcha On Ice Team",
-          replyTo: replyTo || "hello@matchaonice.com",
+          replyTo: replyTo || "contact@matchaonice.com",
           subject: subject || "",
           body: body || "",
           attachmentFilename: req.file?.originalname || null,
@@ -1705,7 +1705,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         subject,
         body: body || "",
         senderName: senderName || "Matcha On Ice Team",
-        replyTo: replyTo || "hello@matchaonice.com",
+        replyTo: replyTo || "contact@matchaonice.com",
         pdfBuffer: req.file?.buffer,
         pdfFilename: req.file?.originalname,
       });
@@ -1738,7 +1738,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         campaign = await storage.updateEmailCampaign(id, {
           subject, body,
           senderName: senderName || "Matcha On Ice Team",
-          replyTo: replyTo || "hello@matchaonice.com",
+          replyTo: replyTo || "contact@matchaonice.com",
           attachmentFilename: req.file?.originalname || existing.attachmentFilename,
           attachmentSize: req.file?.size || existing.attachmentSize,
           totalRecipients: parsed.length,
@@ -1755,7 +1755,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       } else {
         campaign = await storage.createEmailCampaign({
           senderName: senderName || "Matcha On Ice Team",
-          replyTo: replyTo || "hello@matchaonice.com",
+          replyTo: replyTo || "contact@matchaonice.com",
           subject, body,
           attachmentFilename: req.file?.originalname || null,
           attachmentSize: req.file?.size || null,

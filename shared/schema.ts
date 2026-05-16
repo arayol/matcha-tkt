@@ -161,7 +161,7 @@ export type EmailContact = typeof emailContacts.$inferSelect;
 export const emailCampaigns = pgTable("email_campaigns", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   senderName: text("sender_name").notNull().default("Matcha On Ice Team"),
-  replyTo: text("reply_to").notNull().default("hello@matchaonice.com"),
+  replyTo: text("reply_to").notNull().default("contact@matchaonice.com"),
   subject: text("subject").notNull(),
   body: text("body").notNull(),
   attachmentFilename: text("attachment_filename"),
