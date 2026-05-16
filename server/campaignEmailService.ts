@@ -129,8 +129,7 @@ function makeRfc2822(params: {
   replyTo: string;
   subject: string;
   htmlBody: string;
-  pdfBuffer?: Buffer;
-  pdfFilename?: string;
+  attachments?: { buffer: Buffer; filename: string }[];
   logoBuffer: Buffer;
   messageId: string;
   fromDomain: string;
@@ -173,16 +172,19 @@ function makeRfc2822(params: {
     ``,
   ];
 
-  if (params.pdfBuffer && params.pdfBuffer.length > 0 && params.pdfFilename) {
-    lines.push(
-      `--${mixedBoundary}`,
-      `Content-Type: application/pdf; name="${params.pdfFilename}"`,
-      `Content-Disposition: attachment; filename="${params.pdfFilename}"`,
-      `Content-Transfer-Encoding: base64`,
-      ``,
-      (params.pdfBuffer.toString("base64").match(/.{1,76}/g) || []).join("\r\n"),
-      ``,
-    );
+  for (const att of params.attachments || []) {
+    if (att.buffer && att.buffer.length > 0 && att.filename) {
+      const mimeType = att.filename.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream";
+      lines.push(
+        `--${mixedBoundary}`,
+        `Content-Type: ${mimeType}; name="${att.filename}"`,
+        `Content-Disposition: attachment; filename="${att.filename}"`,
+        `Content-Transfer-Encoding: base64`,
+        ``,
+        (att.buffer.toString("base64").match(/.{1,76}/g) || []).join("\r\n"),
+        ``,
+      );
+    }
   }
 
   lines.push(`--${mixedBoundary}--`);
@@ -197,8 +199,7 @@ export async function sendCampaignEmail(params: {
   body: string;
   senderName: string;
   replyTo: string;
-  pdfBuffer?: Buffer;
-  pdfFilename?: string;
+  attachments?: { buffer: Buffer; filename: string }[];
 }): Promise<{ messageIdHeader: string; gmailMessageId: string; threadId: string }> {
   const gmail = await getGmailClient();
   const { email: senderAddress } = await getAccessTokenAndEmail();
@@ -221,8 +222,7 @@ export async function sendCampaignEmail(params: {
     replyTo: params.replyTo,
     subject: personalizedSubject,
     htmlBody,
-    pdfBuffer: params.pdfBuffer,
-    pdfFilename: params.pdfFilename,
+    attachments: params.attachments,
     logoBuffer: LOGO_BUFFER,
     messageId: localId,
     fromDomain,

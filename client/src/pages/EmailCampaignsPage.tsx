@@ -133,7 +133,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
 
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const [parsed, setParsed] = useState<ParseResp | null>(null);
@@ -194,13 +194,15 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
   // When using saved contacts, the "import" step is implicitly already done.
   const effectiveContactsImported = contactsMode === "saved" ? savedSelected.length > 0 : contactsImported;
 
-  const handlePdfPick = (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      toast({ title: "Please select a PDF file", variant: "destructive" });
-      return;
-    }
-    setPdfFile(file);
+  const handlePdfsAdd = (fileList: FileList | File[]) => {
+    const incoming = Array.from(fileList);
+    setPdfFiles(prev => {
+      const existing = new Set(prev.map(f => f.name));
+      const toAdd = incoming.filter(f => !existing.has(f.name));
+      return [...prev, ...toAdd];
+    });
   };
+  const removePdfFile = (name: string) => setPdfFiles(prev => prev.filter(f => f.name !== name));
 
   const parseMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -330,7 +332,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
       fd.append("senderName", senderName);
       fd.append("replyTo", replyTo);
       fd.append("testEmail", testEmail);
-      if (pdfFile) fd.append("attachment", pdfFile);
+      pdfFiles.forEach(f => fd.append("attachment", f));
       const res = await fetch("/api/admin/email-campaigns/test-send", {
         method: "POST", credentials: "include", body: fd,
       });
@@ -352,7 +354,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
       if (validContacts.length > 0) {
         fd.append("contacts", JSON.stringify(validContacts.map((c) => ({ name: c.name, email: c.email }))));
       }
-      if (pdfFile) fd.append("attachment", pdfFile);
+      pdfFiles.forEach(f => fd.append("attachment", f));
       const res = await fetch("/api/admin/email-campaigns/draft", {
         method: "POST", credentials: "include", body: fd,
       });
@@ -371,14 +373,13 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
     mutationFn: async () => {
       if (validContacts.length === 0) throw new Error("Import contacts first");
       if (!subject.trim() || !body.trim()) throw new Error("Subject and body are required");
-      if (!pdfFile) throw new Error("Attach a PDF presentation deck before sending");
       const fd = new FormData();
       fd.append("subject", subject);
       fd.append("body", body);
       fd.append("senderName", senderName);
       fd.append("replyTo", replyTo);
       fd.append("contacts", JSON.stringify(validContacts.map((c) => ({ name: c.name, email: c.email }))));
-      fd.append("attachment", pdfFile);
+      pdfFiles.forEach(f => fd.append("attachment", f));
       const res = await fetch("/api/admin/email-campaigns/send", {
         method: "POST", credentials: "include", body: fd,
       });
@@ -451,7 +452,6 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
     validContacts.length > 0 &&
     !!subject.trim() &&
     !!body.trim() &&
-    !!pdfFile &&
     effectiveContactsImported;
 
   const sendDisabledReason = !subject.trim()
@@ -462,9 +462,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
         ? contactsMode === "saved" ? "Pick at least one saved contact" : "Upload contacts"
         : !effectiveContactsImported
           ? "Confirm import to enable sending"
-          : !pdfFile
-            ? "Attach the PDF deck"
-            : "";
+          : "";
 
   return (
     <AppLayout dark={dark} toggleTheme={toggleTheme} onLogout={onLogout} user={user} activePath="/admin/email-campaigns" data-testid="email-campaigns-page">
@@ -527,6 +525,24 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
                   : <SpellCheck className="h-3.5 w-3.5 mr-1.5" />}
                 Check English (US)
               </Button>
+              <input
+                ref={pdfInputRef} type="file" multiple className="hidden"
+                onChange={(e) => { if (e.target.files) handlePdfsAdd(e.target.files); e.target.value = ""; }}
+                data-testid="input-pdf"
+              />
+              <Button size="sm" variant="outline" onClick={() => pdfInputRef.current?.click()} data-testid="button-attach-pdf">
+                <Paperclip className="h-3.5 w-3.5 mr-1.5" />
+                Attach files
+              </Button>
+              {pdfFiles.map(f => (
+                <span key={f.name} className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-muted/50 border border-card-border max-w-[180px]" data-testid={`chip-file-${f.name}`}>
+                  <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{f.name}</span>
+                  <button onClick={() => removePdfFile(f.name)} className="shrink-0 ml-0.5 hover:text-destructive" data-testid={`button-remove-file-${f.name}`}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
               {grammarMatches !== null && (
                 <span className="text-xs text-muted-foreground" data-testid="text-grammar-summary">
                   {grammarMatches.length === 0 ? "No issues found" : `${grammarMatches.length} suggestion(s)`}
@@ -577,37 +593,6 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
             )}
           </div>
 
-          {/* PDF attachment slot */}
-          <div className="mt-4">
-            <input
-              ref={pdfInputRef} type="file" accept=".pdf,application/pdf" className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePdfPick(f); e.target.value = ""; }}
-              data-testid="input-pdf"
-            />
-            {pdfFile ? (
-              <div className="flex items-center gap-3 rounded-2xl border border-card-border bg-muted/40 px-4 py-3" data-testid="pdf-attached">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/15 text-rose-500">
-                  <FileText className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{pdfFile.name}</p>
-                  <p className="text-xs text-muted-foreground">{formatBytes(pdfFile.size)} · attached to every email</p>
-                </div>
-                <Button size="icon" variant="ghost" onClick={() => setPdfFile(null)} data-testid="button-remove-pdf">
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <button
-                onClick={() => pdfInputRef.current?.click()}
-                className="w-full flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-amber-400/50 bg-amber-50/40 dark:bg-amber-950/10 px-4 py-5 text-sm text-amber-700 dark:text-amber-300 hover:border-amber-500 transition-colors"
-                data-testid="button-attach-pdf"
-              >
-                <Paperclip className="h-4 w-4" />
-                Attach PDF presentation deck
-              </button>
-            )}
-          </div>
         </SectionCard>
 
         {/* 2 + 3 side by side */}
@@ -806,8 +791,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
               />
               <Button
                 variant="outline" onClick={() => testSendMutation.mutate()}
-                disabled={testSendMutation.isPending || !testEmail || !subject || !body || !pdfFile}
-                title={!pdfFile ? "Attach the PDF deck first" : undefined}
+                disabled={testSendMutation.isPending || !testEmail || !subject || !body}
                 data-testid="button-send-test"
               >
                 {testSendMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}

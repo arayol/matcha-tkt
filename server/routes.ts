@@ -37,19 +37,24 @@ function attachmentMetaPath(id: string) {
 function attachmentDataPath(id: string, filename: string) {
   return path.join(CAMPAIGN_ATTACH_DIR, `${id}__${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`);
 }
-function saveCampaignAttachment(id: string, buffer: Buffer, filename: string) {
-  const dataPath = attachmentDataPath(id, filename);
-  fs.writeFileSync(dataPath, buffer);
-  fs.writeFileSync(attachmentMetaPath(id), JSON.stringify({ filename, dataPath }));
+function saveCampaignAttachments(id: string, files: Express.Multer.File[]) {
+  const saved = files.map(f => {
+    const dataPath = attachmentDataPath(id, f.originalname);
+    fs.writeFileSync(dataPath, f.buffer);
+    return { filename: f.originalname, dataPath };
+  });
+  fs.writeFileSync(attachmentMetaPath(id), JSON.stringify(saved));
 }
-function loadCampaignAttachment(id: string): { buffer: Buffer; filename: string } | undefined {
+function loadCampaignAttachments(id: string): { buffer: Buffer; filename: string }[] {
   try {
     const metaPath = attachmentMetaPath(id);
-    if (!fs.existsSync(metaPath)) return undefined;
-    const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8")) as { filename: string; dataPath: string };
-    if (!fs.existsSync(meta.dataPath)) return undefined;
-    return { buffer: fs.readFileSync(meta.dataPath), filename: meta.filename };
-  } catch { return undefined; }
+    if (!fs.existsSync(metaPath)) return [];
+    const raw = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
+    const items: { filename: string; dataPath: string }[] = Array.isArray(raw) ? raw : [raw];
+    return items
+      .filter(m => m.dataPath && fs.existsSync(m.dataPath))
+      .map(m => ({ buffer: fs.readFileSync(m.dataPath), filename: m.filename }));
+  } catch { return []; }
 }
 
 const campaignContactSchema = z.object({
@@ -98,7 +103,7 @@ async function processCampaignSends(campaignId: string) {
   const campaign = await storage.getEmailCampaign(campaignId);
   if (!campaign) return;
   const meta = { subject: campaign.subject, body: campaign.body, senderName: campaign.senderName, replyTo: campaign.replyTo };
-  const attachment = loadCampaignAttachment(campaignId);
+  const attachments = loadCampaignAttachments(campaignId);
   await storage.updateEmailCampaign(campaignId, { status: "sending", startedAt: new Date() });
   const recipients = await storage.listCampaignRecipients(campaignId);
   for (const r of recipients) {
@@ -107,8 +112,7 @@ async function processCampaignSends(campaignId: string) {
       const sendResult = await sendCampaignEmail({
         to: r.email, name: r.name, subject: meta.subject, body: meta.body,
         senderName: meta.senderName, replyTo: meta.replyTo,
-        pdfBuffer: attachment?.buffer,
-        pdfFilename: attachment?.filename,
+        attachments,
       });
       await storage.updateCampaignRecipient(r.id, { status: "sent", sentAt: new Date(), error: null, messageId: sendResult.messageIdHeader, threadId: sendResult.threadId });
     } catch (err: any) {
@@ -1598,7 +1602,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  app.post("/api/admin/email-campaigns/draft", requireAdmin, campaignUpload.single("attachment"), async (req, res) => {
+  app.post("/api/admin/email-campaigns/draft", requireAdmin, campaignUpload.array("attachment", 10), async (req, res) => {
     try {
       const { id, subject, body, senderName, replyTo, contacts } = req.body as Record<string, string>;
       if (!subject?.trim() && !body?.trim()) {
@@ -1609,6 +1613,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         try { const raw = JSON.parse(contacts); parsed = campaignContactsSchema.parse(raw); } catch { parsed = []; }
       }
       const user = req.user as any;
+      const files = (req.files || []) as Express.Multer.File[];
+      const filenamesJson = files.length > 0 ? JSON.stringify(files.map(f => f.originalname)) : null;
+      const totalSize = files.length > 0 ? files.reduce((s, f) => s + f.size, 0) : null;
       let campaign;
       if (id) {
         const existing = await storage.getEmailCampaign(id);
@@ -1621,25 +1628,24 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           body: body || "",
           senderName: senderName || "Matcha On Ice Team",
           replyTo: replyTo || "contact@matchaonice.com",
-          attachmentFilename: req.file?.originalname || undefined,
-          attachmentSize: req.file?.size || undefined,
+          ...(filenamesJson ? { attachmentFilename: filenamesJson, attachmentSize: totalSize } : {}),
           totalRecipients: parsed.length || undefined,
         });
         if (!campaign) return res.status(404).json({ error: "Draft not found" });
-        if (req.file) saveCampaignAttachment(id, req.file.buffer, req.file.originalname);
+        if (files.length > 0) saveCampaignAttachments(id, files);
       } else {
         campaign = await storage.createEmailCampaign({
           senderName: senderName || "Matcha On Ice Team",
           replyTo: replyTo || "contact@matchaonice.com",
           subject: subject || "",
           body: body || "",
-          attachmentFilename: req.file?.originalname || null,
-          attachmentSize: req.file?.size || null,
+          attachmentFilename: filenamesJson,
+          attachmentSize: totalSize,
           totalRecipients: parsed.length,
           status: "draft",
           createdBy: user?.username || null,
         });
-        if (req.file) saveCampaignAttachment(campaign.id, req.file.buffer, req.file.originalname);
+        if (files.length > 0) saveCampaignAttachments(campaign.id, files);
       }
       if (parsed.length > 0) {
         const existing = await storage.listCampaignRecipients(campaign.id);
@@ -1694,11 +1700,12 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  app.post("/api/admin/email-campaigns/test-send", requireAdmin, campaignUpload.single("attachment"), async (req, res) => {
+  app.post("/api/admin/email-campaigns/test-send", requireAdmin, campaignUpload.array("attachment", 10), async (req, res) => {
     try {
       const { subject, body, senderName, replyTo, testEmail } = req.body as Record<string, string>;
       if (!testEmail) return res.status(400).json({ error: "testEmail required" });
       if (!subject) return res.status(400).json({ error: "subject required" });
+      const files = (req.files || []) as Express.Multer.File[];
       await sendCampaignEmail({
         to: testEmail,
         name: "Test Recipient",
@@ -1706,8 +1713,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         body: body || "",
         senderName: senderName || "Matcha On Ice Team",
         replyTo: replyTo || "contact@matchaonice.com",
-        pdfBuffer: req.file?.buffer,
-        pdfFilename: req.file?.originalname,
+        attachments: files.map(f => ({ buffer: f.buffer, filename: f.originalname })),
       });
       res.json({ ok: true });
     } catch (err: any) {
@@ -1715,7 +1721,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  app.post("/api/admin/email-campaigns/send", requireAdmin, campaignUpload.single("attachment"), async (req, res) => {
+  app.post("/api/admin/email-campaigns/send", requireAdmin, campaignUpload.array("attachment", 10), async (req, res) => {
     try {
       const { id, subject, body, senderName, replyTo, contacts } = req.body as Record<string, string>;
       if (!subject?.trim()) return res.status(400).json({ error: "subject required" });
@@ -1728,6 +1734,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       }
       if (parsed.length === 0) return res.status(400).json({ error: "At least one recipient required" });
       const user = req.user as any;
+      const files = (req.files || []) as Express.Multer.File[];
+      const filenamesJson = files.length > 0 ? JSON.stringify(files.map(f => f.originalname)) : null;
+      const totalSize = files.length > 0 ? files.reduce((s, f) => s + f.size, 0) : null;
       let campaign;
       if (id) {
         const existing = await storage.getEmailCampaign(id);
@@ -1739,13 +1748,13 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           subject, body,
           senderName: senderName || "Matcha On Ice Team",
           replyTo: replyTo || "contact@matchaonice.com",
-          attachmentFilename: req.file?.originalname || existing.attachmentFilename,
-          attachmentSize: req.file?.size || existing.attachmentSize,
+          attachmentFilename: filenamesJson || existing.attachmentFilename,
+          attachmentSize: totalSize || existing.attachmentSize,
           totalRecipients: parsed.length,
           status: "queued",
         });
         if (!campaign) return res.status(404).json({ error: "Campaign not found" });
-        if (req.file) saveCampaignAttachment(id, req.file.buffer, req.file.originalname);
+        if (files.length > 0) saveCampaignAttachments(id, files);
         const existingRecipients = await storage.listCampaignRecipients(id);
         if (existingRecipients.length === 0) {
           await storage.bulkCreateCampaignRecipients(
@@ -1757,13 +1766,13 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           senderName: senderName || "Matcha On Ice Team",
           replyTo: replyTo || "contact@matchaonice.com",
           subject, body,
-          attachmentFilename: req.file?.originalname || null,
-          attachmentSize: req.file?.size || null,
+          attachmentFilename: filenamesJson,
+          attachmentSize: totalSize,
           totalRecipients: parsed.length,
           status: "queued",
           createdBy: user?.username || null,
         });
-        if (req.file) saveCampaignAttachment(campaign.id, req.file.buffer, req.file.originalname);
+        if (files.length > 0) saveCampaignAttachments(campaign.id, files);
         await storage.bulkCreateCampaignRecipients(
           parsed.map((c) => ({ campaignId: campaign!.id, name: c.name, email: c.email, status: "pending" })),
         );
