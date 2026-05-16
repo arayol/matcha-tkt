@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Mail, Upload, FileText, Send, CheckCircle2, XCircle, Loader2, Paperclip,
-  RotateCcw, AlertTriangle, SpellCheck, Eye, X, Save, RefreshCw, Wand2, Reply, Trash2,
+  RotateCcw, AlertTriangle, SpellCheck, Eye, X, Save, RefreshCw, Wand2, Reply, Trash2, ChevronDown,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -69,20 +69,27 @@ function NumberBadge({ n }: { n: number }) {
 }
 
 function SectionCard({
-  number, title, meta, children, testId,
+  number, title, meta, children, testId, collapsed, onToggle,
 }: {
   number: number; title: string; meta?: React.ReactNode; children: React.ReactNode; testId?: string;
+  collapsed?: boolean; onToggle?: () => void;
 }) {
   return (
     <div className="rounded-3xl border border-card-border bg-card p-5 md:p-6 shadow-card" data-testid={testId}>
-      <div className="flex items-center justify-between mb-4 gap-3">
+      <div
+        className={`flex items-center justify-between gap-3 ${!collapsed ? "mb-4" : ""} ${onToggle ? "cursor-pointer select-none" : ""}`}
+        onClick={onToggle}
+      >
         <div className="flex items-center gap-3 min-w-0">
           <NumberBadge n={number} />
           <h2 className="text-base md:text-lg font-semibold truncate">{title}</h2>
           {meta && <div className="text-xs text-muted-foreground truncate">{meta}</div>}
         </div>
+        {onToggle && (
+          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform flex-shrink-0 ${collapsed ? "" : "rotate-180"}`} />
+        )}
       </div>
-      {children}
+      {!collapsed && children}
     </div>
   );
 }
@@ -119,6 +126,8 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
 
   const [draftId, setDraftId] = useState<string | null>(null);
   const [confirmSendOpen, setConfirmSendOpen] = useState(false);
+  const [progressCollapsed, setProgressCollapsed] = useState(true);
+  const [historyCollapsed, setHistoryCollapsed] = useState(true);
   const [senderName, setSenderName] = useState("Matcha On Ice Team");
   const [replyTo, setReplyTo] = useState("contact@matchaonice.com");
   const [subject, setSubject] = useState("");
@@ -601,6 +610,9 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
           </div>
         </SectionCard>
 
+        {/* 2 + 3 side by side */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
         {/* 2. Import contacts */}
         <SectionCard
           number={2}
@@ -778,7 +790,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
         </SectionCard>
 
         {/* 3. Test & send */}
-        <SectionCard number={3} title="Test & send" testId="card-test-send">
+        <SectionCard number={3} title="Test & send" testId="card-test-send" >
           <div className="rounded-2xl border border-card-border bg-muted/30 p-4 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 min-w-0">
               <Eye className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -852,6 +864,8 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
           </div>
         </SectionCard>
 
+        </div>{/* end grid 2+3 */}
+
         {/* 4. Sending in progress */}
         {showProgress && activeDetail && (
           <SectionCard
@@ -859,6 +873,8 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
             title="Sending in progress"
             meta={`· ${activeDetail.campaign.sentCount} of ${activeDetail.campaign.totalRecipients} sent · ${formatElapsed(activeDetail.campaign.startedAt, activeDetail.campaign.completedAt)} elapsed`}
             testId="card-progress"
+            collapsed={progressCollapsed}
+            onToggle={() => setProgressCollapsed(v => !v)}
           >
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <div className="rounded-2xl border border-card-border bg-muted/30 p-4">
@@ -994,6 +1010,8 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
             await apiRequest("DELETE", `/api/admin/email-campaigns/${id}`);
             queryClient.invalidateQueries({ queryKey: ["/api/admin/email-campaigns"] });
           }}
+          collapsed={historyCollapsed}
+          onToggle={() => setHistoryCollapsed(v => !v)}
         />
       </div>
     </AppLayout>
@@ -1001,13 +1019,15 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
 }
 
 function HistoryCard({
-  campaigns, checkingRepliesId, onCheckReplies, onView, onDelete,
+  campaigns, checkingRepliesId, onCheckReplies, onView, onDelete, collapsed, onToggle,
 }: {
   campaigns: EmailCampaign[];
   checkingRepliesId: string | null;
   onCheckReplies: (id: string) => void;
   onView: (id: string) => void;
   onDelete: (id: string) => Promise<void>;
+  collapsed?: boolean;
+  onToggle?: () => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -1033,6 +1053,8 @@ function HistoryCard({
     <SectionCard
       number={5}
       title="Campaign history"
+      collapsed={collapsed}
+      onToggle={onToggle}
       meta={`· ${campaigns.length} campaign${campaigns.length === 1 ? "" : "s"}`}
       testId="card-history"
     >
