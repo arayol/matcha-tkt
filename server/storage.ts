@@ -3,6 +3,7 @@ import { db } from "./db";
 import bcrypt from "bcryptjs";
 import {
   users, events, tickets, csvUploads, hostingerOrders, customers, eventDateNames,
+  emailContacts, emailCampaigns, emailCampaignRecipients,
   type User, type InsertUser,
   type Event, type InsertEvent,
   type Ticket, type InsertTicket,
@@ -10,6 +11,9 @@ import {
   type HostingerOrder, type InsertHostingerOrder,
   type Customer, type InsertCustomer,
   type EventDateName, type InsertEventDateName,
+  type EmailContact, type InsertEmailContact,
+  type EmailCampaign, type InsertEmailCampaign,
+  type EmailCampaignRecipient, type InsertEmailCampaignRecipient,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -69,6 +73,19 @@ export interface IStorage {
   upsertEventDateName(data: InsertEventDateName): Promise<EventDateName>;
   updateEventDateName(id: string, data: Partial<InsertEventDateName>): Promise<EventDateName | null>;
   deleteEventDateName(id: string): Promise<boolean>;
+
+  upsertEmailContacts(rows: InsertEmailContact[]): Promise<{ inserted: number; updated: number }>;
+  listEmailContacts(): Promise<EmailContact[]>;
+
+  createEmailCampaign(data: InsertEmailCampaign): Promise<EmailCampaign>;
+  getEmailCampaign(id: string): Promise<EmailCampaign | undefined>;
+  listEmailCampaigns(): Promise<EmailCampaign[]>;
+  updateEmailCampaign(id: string, data: Partial<EmailCampaign>): Promise<EmailCampaign | undefined>;
+
+  bulkCreateCampaignRecipients(rows: InsertEmailCampaignRecipient[]): Promise<EmailCampaignRecipient[]>;
+  listCampaignRecipients(campaignId: string): Promise<EmailCampaignRecipient[]>;
+  updateCampaignRecipient(id: string, data: Partial<EmailCampaignRecipient>): Promise<EmailCampaignRecipient | undefined>;
+  countCampaignRecipientsByStatus(campaignId: string, status: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -346,6 +363,68 @@ export class DatabaseStorage implements IStorage {
   async deleteEventDateName(id: string): Promise<boolean> {
     const deleted = await db.delete(eventDateNames).where(eq(eventDateNames.id, id)).returning();
     return deleted.length > 0;
+  }
+
+  async upsertEmailContacts(rows: InsertEmailContact[]): Promise<{ inserted: number; updated: number }> {
+    let inserted = 0;
+    let updated = 0;
+    for (const row of rows) {
+      const email = row.email.toLowerCase().trim();
+      const existing = await db.select().from(emailContacts).where(eq(emailContacts.email, email));
+      if (existing.length > 0) {
+        await db.update(emailContacts)
+          .set({ name: row.name, sourceFile: row.sourceFile ?? existing[0].sourceFile })
+          .where(eq(emailContacts.email, email));
+        updated++;
+      } else {
+        await db.insert(emailContacts).values({ ...row, email });
+        inserted++;
+      }
+    }
+    return { inserted, updated };
+  }
+
+  async listEmailContacts(): Promise<EmailContact[]> {
+    return await db.select().from(emailContacts).orderBy(desc(emailContacts.createdAt));
+  }
+
+  async createEmailCampaign(data: InsertEmailCampaign): Promise<EmailCampaign> {
+    const [created] = await db.insert(emailCampaigns).values(data).returning();
+    return created;
+  }
+
+  async getEmailCampaign(id: string): Promise<EmailCampaign | undefined> {
+    const [c] = await db.select().from(emailCampaigns).where(eq(emailCampaigns.id, id));
+    return c;
+  }
+
+  async listEmailCampaigns(): Promise<EmailCampaign[]> {
+    return await db.select().from(emailCampaigns).orderBy(desc(emailCampaigns.createdAt));
+  }
+
+  async updateEmailCampaign(id: string, data: Partial<EmailCampaign>): Promise<EmailCampaign | undefined> {
+    const [updated] = await db.update(emailCampaigns).set(data).where(eq(emailCampaigns.id, id)).returning();
+    return updated;
+  }
+
+  async bulkCreateCampaignRecipients(rows: InsertEmailCampaignRecipient[]): Promise<EmailCampaignRecipient[]> {
+    if (rows.length === 0) return [];
+    return await db.insert(emailCampaignRecipients).values(rows).returning();
+  }
+
+  async listCampaignRecipients(campaignId: string): Promise<EmailCampaignRecipient[]> {
+    return await db.select().from(emailCampaignRecipients).where(eq(emailCampaignRecipients.campaignId, campaignId));
+  }
+
+  async updateCampaignRecipient(id: string, data: Partial<EmailCampaignRecipient>): Promise<EmailCampaignRecipient | undefined> {
+    const [updated] = await db.update(emailCampaignRecipients).set(data).where(eq(emailCampaignRecipients.id, id)).returning();
+    return updated;
+  }
+
+  async countCampaignRecipientsByStatus(campaignId: string, status: string): Promise<number> {
+    const rows = await db.select().from(emailCampaignRecipients)
+      .where(and(eq(emailCampaignRecipients.campaignId, campaignId), eq(emailCampaignRecipients.status, status)));
+    return rows.length;
   }
 }
 
