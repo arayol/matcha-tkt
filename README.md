@@ -131,12 +131,7 @@
   SESSION_SECRET=... (já configurado)
   ```
 
-  ## 📚 Documentação
 
-  - 📖 [Guia de Produção](PRODUCTION.md) - Configuração completa
-  - 🚀 [Quick Start](QUICKSTART.md) - Setup em 5 minutos
-  - 🔗 [Stripe Webhooks](https://stripe.com/docs/webhooks)
-  - 🔗 [Checkout Session API](https://stripe.com/docs/api/checkout/sessions)
 
 
   
