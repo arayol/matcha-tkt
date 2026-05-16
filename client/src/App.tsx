@@ -12,6 +12,7 @@ import CourtesyPage from "@/pages/CourtesyPage";
 import AdminUsersPage from "@/pages/AdminUsersPage";
 import ReconciliationPage from "@/pages/ReconciliationPage";
 import EventComparisonPage from "@/pages/EventComparisonPage";
+import EmailCampaignsPage from "@/pages/EmailCampaignsPage";
 import NotFound from "@/pages/not-found";
 import { Toaster } from "@/components/ui/toaster";
 
@@ -108,6 +109,13 @@ function AppContent() {
             <Route path="/admin/users">
               {isAdmin ? (
                 <AdminUsersPage {...shared} />
+              ) : (
+                () => { navigate("/scan"); return null; }
+              )}
+            </Route>
+            <Route path="/admin/email-campaigns">
+              {isAdmin ? (
+                <EmailCampaignsPage {...shared} />
               ) : (
                 () => { navigate("/scan"); return null; }
               )}

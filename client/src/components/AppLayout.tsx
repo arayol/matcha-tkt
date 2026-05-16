@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import {
   LayoutDashboard, Ticket, LogOut, ScanLine, Gift, Users,
-  Menu, X, Moon, Sun, Shield, GitCompareArrows, BarChart3,
+  Menu, X, Moon, Sun, Shield, GitCompareArrows, BarChart3, Mail,
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -27,6 +27,7 @@ export default function AppLayout({ dark, toggleTheme, onLogout, user, activePat
     { icon: Gift, label: "Courtesy Ticket", href: "/courtesy", adminOnly: false },
     ...(isAdmin ? [{ icon: GitCompareArrows, label: "Reconciliation", href: "/admin/reconciliation", adminOnly: false }] : []),
     ...(isAdmin ? [{ icon: BarChart3, label: "Event Comparison", href: "/admin/events", adminOnly: false }] : []),
+    ...(isAdmin ? [{ icon: Mail, label: "Email Campaigns", href: "/admin/email-campaigns", adminOnly: false }] : []),
     ...(isAdmin ? [{ icon: Users, label: "User Management", href: "/admin/users", adminOnly: false }] : []),
   ];
 
@@ -39,6 +40,7 @@ export default function AppLayout({ dark, toggleTheme, onLogout, user, activePat
     { icon: Gift, label: "Courtesy", href: "/courtesy" },
     ...(isAdmin ? [{ icon: GitCompareArrows, label: "Reconciliation", href: "/admin/reconciliation" }] : []),
     ...(isAdmin ? [{ icon: BarChart3, label: "Events", href: "/admin/events" }] : []),
+    ...(isAdmin ? [{ icon: Mail, label: "Email", href: "/admin/email-campaigns" }] : []),
     ...(isAdmin ? [{ icon: Users, label: "Users", href: "/admin/users" }] : []),
   ];
 

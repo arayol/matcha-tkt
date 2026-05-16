@@ -145,3 +145,60 @@ export const eventDateNames = pgTable("event_date_names", {
 export const insertEventDateNameSchema = createInsertSchema(eventDateNames).omit({ id: true, createdAt: true });
 export type InsertEventDateName = z.infer<typeof insertEventDateNameSchema>;
 export type EventDateName = typeof eventDateNames.$inferSelect;
+
+export const emailContacts = pgTable("email_contacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  sourceFile: text("source_file"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertEmailContactSchema = createInsertSchema(emailContacts).omit({ id: true, createdAt: true });
+export type InsertEmailContact = z.infer<typeof insertEmailContactSchema>;
+export type EmailContact = typeof emailContacts.$inferSelect;
+
+export const emailCampaigns = pgTable("email_campaigns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  senderName: text("sender_name").notNull().default("Matcha On Ice Team"),
+  replyTo: text("reply_to").notNull().default("hello@matchaonice.com"),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  attachmentFilename: text("attachment_filename"),
+  attachmentSize: integer("attachment_size"),
+  totalRecipients: integer("total_recipients").notNull().default(0),
+  sentCount: integer("sent_count").notNull().default(0),
+  failedCount: integer("failed_count").notNull().default(0),
+  repliedCount: integer("replied_count").notNull().default(0),
+  status: text("status").notNull().default("draft"),
+  createdAt: timestamp("created_at").defaultNow(),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdBy: text("created_by"),
+});
+
+export const insertEmailCampaignSchema = createInsertSchema(emailCampaigns).omit({
+  id: true, createdAt: true, startedAt: true, completedAt: true,
+  sentCount: true, failedCount: true, repliedCount: true,
+});
+export type InsertEmailCampaign = z.infer<typeof insertEmailCampaignSchema>;
+export type EmailCampaign = typeof emailCampaigns.$inferSelect;
+
+export const emailCampaignRecipients = pgTable("email_campaign_recipients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").notNull(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  status: text("status").notNull().default("pending"),
+  error: text("error"),
+  sentAt: timestamp("sent_at"),
+  repliedAt: timestamp("replied_at"),
+  messageId: text("message_id"),
+  threadId: text("thread_id"),
+});
+
+export const insertEmailCampaignRecipientSchema = createInsertSchema(emailCampaignRecipients).omit({
+  id: true, sentAt: true, repliedAt: true, messageId: true, threadId: true,
+});
+export type InsertEmailCampaignRecipient = z.infer<typeof insertEmailCampaignRecipientSchema>;
+export type EmailCampaignRecipient = typeof emailCampaignRecipients.$inferSelect;

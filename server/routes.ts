@@ -7,12 +7,124 @@ import { storage } from "./storage";
 import { generateTicketQR } from "./qrcode";
 import { generateTicketPDF } from "./pdfGenerator";
 import { sendTicketEmail } from "./emailService";
+import { sendCampaignEmail, getGmailSenderInfo, checkCampaignReplies } from "./campaignEmailService";
+import { parseExcelBuffer, assertXlsxFilename } from "./excelParser";
 import { insertTicketSchema } from "@shared/schema";
 import { parseCsvContent, checkDatabaseDuplicates } from "./csvParser";
 import { getUncachableStripeClient } from "./stripeClient";
 import { z } from "zod";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
+
+const CAMPAIGN_ATTACH_DIR = path.join(os.tmpdir(), "moi-campaigns");
+try { fs.mkdirSync(CAMPAIGN_ATTACH_DIR, { recursive: true }); } catch {}
+try {
+  const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  for (const f of fs.readdirSync(CAMPAIGN_ATTACH_DIR)) {
+    const full = path.join(CAMPAIGN_ATTACH_DIR, f);
+    try {
+      const stat = fs.statSync(full);
+      if (now - stat.mtimeMs > MAX_AGE_MS) fs.unlinkSync(full);
+    } catch {}
+  }
+} catch {}
+
+function attachmentMetaPath(id: string) {
+  return path.join(CAMPAIGN_ATTACH_DIR, `${id}.json`);
+}
+function attachmentDataPath(id: string, filename: string) {
+  return path.join(CAMPAIGN_ATTACH_DIR, `${id}__${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`);
+}
+function saveCampaignAttachment(id: string, buffer: Buffer, filename: string) {
+  const dataPath = attachmentDataPath(id, filename);
+  fs.writeFileSync(dataPath, buffer);
+  fs.writeFileSync(attachmentMetaPath(id), JSON.stringify({ filename, dataPath }));
+}
+function loadCampaignAttachment(id: string): { buffer: Buffer; filename: string } | undefined {
+  try {
+    const metaPath = attachmentMetaPath(id);
+    if (!fs.existsSync(metaPath)) return undefined;
+    const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8")) as { filename: string; dataPath: string };
+    if (!fs.existsSync(meta.dataPath)) return undefined;
+    return { buffer: fs.readFileSync(meta.dataPath), filename: meta.filename };
+  } catch { return undefined; }
+}
+
+const campaignContactSchema = z.object({
+  name: z.string().min(1).max(200),
+  email: z.string().email().max(320),
+});
+const campaignContactsSchema = z.array(campaignContactSchema).min(1).max(10000);
+
+function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
+
+const REPLY_POLL_INTERVAL_MS = 5 * 60 * 1000;
+let replyPollerStarted = false;
+function startReplyPoller() {
+  if (replyPollerStarted) return;
+  replyPollerStarted = true;
+  const tick = async () => {
+    try {
+      const all = await storage.listEmailCampaigns();
+      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      for (const c of all) {
+        if (c.status !== "completed" && c.status !== "sending") continue;
+        const startedAtMs = c.startedAt ? new Date(c.startedAt).getTime() : new Date(c.createdAt).getTime();
+        if (startedAtMs < cutoff) continue;
+        const recipients = await storage.listCampaignRecipients(c.id);
+        const targets = recipients.filter((r) => r.status === "sent" && !r.repliedAt);
+        if (targets.length === 0) continue;
+        try {
+          const repliedIds = await checkCampaignReplies(
+            targets.map((r) => ({ recipientId: r.id, email: r.email, messageIdHeader: r.messageId, threadId: r.threadId })),
+            startedAtMs,
+          );
+          let added = 0;
+          for (const r of targets) {
+            if (repliedIds.has(r.id)) { await storage.updateCampaignRecipient(r.id, { repliedAt: new Date() }); added++; }
+          }
+          if (added > 0) await storage.updateEmailCampaign(c.id, { repliedCount: c.repliedCount + added });
+        } catch (e) { console.error(`Passive reply poll failed for campaign ${c.id}:`, e); }
+      }
+    } catch (e) { console.error("Reply poller tick error:", e); }
+  };
+  setTimeout(tick, 30_000);
+  setInterval(tick, REPLY_POLL_INTERVAL_MS);
+}
+
+async function processCampaignSends(campaignId: string) {
+  const campaign = await storage.getEmailCampaign(campaignId);
+  if (!campaign) return;
+  const meta = { subject: campaign.subject, body: campaign.body, senderName: campaign.senderName, replyTo: campaign.replyTo };
+  const attachment = loadCampaignAttachment(campaignId);
+  await storage.updateEmailCampaign(campaignId, { status: "sending", startedAt: new Date() });
+  const recipients = await storage.listCampaignRecipients(campaignId);
+  for (const r of recipients) {
+    if (r.status !== "pending" && r.status !== "failed") continue;
+    try {
+      const sendResult = await sendCampaignEmail({
+        to: r.email, name: r.name, subject: meta.subject, body: meta.body,
+        senderName: meta.senderName, replyTo: meta.replyTo,
+        pdfBuffer: attachment?.buffer,
+        pdfFilename: attachment?.filename,
+      });
+      await storage.updateCampaignRecipient(r.id, { status: "sent", sentAt: new Date(), error: null, messageId: sendResult.messageIdHeader, threadId: sendResult.threadId });
+    } catch (err: any) {
+      console.error(`Campaign send failed for ${r.email}:`, err?.message || err);
+      await storage.updateCampaignRecipient(r.id, { status: "failed", error: String(err?.message || err).slice(0, 500) });
+    }
+    const sentNow = await storage.countCampaignRecipientsByStatus(campaignId, "sent");
+    const failedNow = await storage.countCampaignRecipientsByStatus(campaignId, "failed");
+    await storage.updateEmailCampaign(campaignId, { sentCount: sentNow, failedCount: failedNow });
+    await sleep(350);
+  }
+  await storage.updateEmailCampaign(campaignId, { status: "completed", completedAt: new Date() });
+}
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const campaignUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (req.isAuthenticated()) return next();
@@ -1441,6 +1553,333 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       res.json({ message: "Deleted" });
     } catch (err) {
       res.status(500).json({ error: "Failed to delete event date name" });
+    }
+  });
+
+  // ============== Email Campaigns ==============
+
+  startReplyPoller();
+
+  app.get("/api/admin/email-campaigns/sender", requireAdmin, async (_req, res) => {
+    try {
+      const info = await getGmailSenderInfo();
+      res.json(info);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Gmail not connected" });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/parse-contacts", requireAdmin, campaignUpload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+      assertXlsxFilename(req.file.originalname);
+      const result = parseExcelBuffer(req.file.buffer);
+      res.json({ ...result, fileName: req.file.originalname });
+    } catch (err: any) {
+      console.error("Excel parse error:", err);
+      const status = err?.name === "ExcelParseError" ? 400 : 500;
+      res.status(status).json({ error: err?.message || "Failed to parse file" });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/import-contacts", requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        contacts: z.array(z.object({ name: z.string().min(1).max(200), email: z.string().email().max(320) })).min(1).max(10000),
+        sourceFile: z.string().max(255).optional().nullable(),
+      });
+      const { contacts, sourceFile } = schema.parse(req.body);
+      const result = await storage.upsertEmailContacts(
+        contacts.map((c) => ({ name: c.name, email: c.email.toLowerCase().trim(), sourceFile: sourceFile ?? null })),
+      );
+      res.json({ ok: true, ...result });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message || "Failed to import contacts" });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/draft", requireAdmin, campaignUpload.single("attachment"), async (req, res) => {
+    try {
+      const { id, subject, body, senderName, replyTo, contacts } = req.body as Record<string, string>;
+      if (!subject?.trim() && !body?.trim()) {
+        return res.status(400).json({ error: "At least subject or body is required to save a draft" });
+      }
+      let parsed: { name: string; email: string }[] = [];
+      if (contacts) {
+        try { const raw = JSON.parse(contacts); parsed = campaignContactsSchema.parse(raw); } catch { parsed = []; }
+      }
+      const user = req.user as any;
+      let campaign;
+      if (id) {
+        const existing = await storage.getEmailCampaign(id);
+        if (!existing) return res.status(404).json({ error: "Draft not found" });
+        if (existing.status !== "draft") {
+          return res.status(409).json({ error: `Cannot edit a campaign with status "${existing.status}". Drafts only.` });
+        }
+        campaign = await storage.updateEmailCampaign(id, {
+          subject: subject || "",
+          body: body || "",
+          senderName: senderName || "Matcha On Ice Team",
+          replyTo: replyTo || "hello@matchaonice.com",
+          attachmentFilename: req.file?.originalname || undefined,
+          attachmentSize: req.file?.size || undefined,
+          totalRecipients: parsed.length || undefined,
+        });
+        if (!campaign) return res.status(404).json({ error: "Draft not found" });
+        if (req.file) saveCampaignAttachment(id, req.file.buffer, req.file.originalname);
+      } else {
+        campaign = await storage.createEmailCampaign({
+          senderName: senderName || "Matcha On Ice Team",
+          replyTo: replyTo || "hello@matchaonice.com",
+          subject: subject || "",
+          body: body || "",
+          attachmentFilename: req.file?.originalname || null,
+          attachmentSize: req.file?.size || null,
+          totalRecipients: parsed.length,
+          status: "draft",
+          createdBy: user?.username || null,
+        });
+        if (req.file) saveCampaignAttachment(campaign.id, req.file.buffer, req.file.originalname);
+      }
+      if (parsed.length > 0) {
+        const existing = await storage.listCampaignRecipients(campaign.id);
+        if (existing.length === 0) {
+          await storage.bulkCreateCampaignRecipients(
+            parsed.map((c) => ({ campaignId: campaign!.id, name: c.name, email: c.email, status: "pending" })),
+          );
+        }
+      }
+      res.json({ campaign });
+    } catch (err: any) {
+      console.error("Draft save error:", err);
+      res.status(500).json({ error: err?.message || "Failed to save draft" });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/check-english", requireAdmin, async (req, res) => {
+    try {
+      const { subject, body } = req.body as { subject?: string; body?: string };
+      if (!subject && !body) return res.json({ matches: [] });
+      // Basic grammar check — look for common issues without external API
+      const matches: { field: "subject" | "body"; offset: number; length: number; message: string; replacements: string[] }[] = [];
+      const checks: [RegExp, string, string][] = [
+        [/\bi\b/g, "Capitalize 'I'", "I"],
+        [/\bdont\b/gi, "Missing apostrophe", "don't"],
+        [/\bcant\b/gi, "Missing apostrophe", "can't"],
+        [/\bwont\b/gi, "Missing apostrophe", "won't"],
+        [/\bits a\b/gi, "Use 'it's' for 'it is'", "it's"],
+      ];
+      for (const field of ["subject", "body"] as const) {
+        const text = field === "subject" ? (subject || "") : (body || "");
+        for (const [re, message, replacement] of checks) {
+          re.lastIndex = 0;
+          let m: RegExpExecArray | null;
+          while ((m = re.exec(text)) !== null) {
+            matches.push({ field, offset: m.index, length: m[0].length, message, replacements: [replacement] });
+          }
+        }
+      }
+      res.json({ matches });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Check failed" });
+    }
+  });
+
+  app.get("/api/admin/email-campaigns/contacts", requireAdmin, async (_req, res) => {
+    try {
+      const contacts = await storage.listEmailContacts();
+      res.json(contacts);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to fetch contacts" });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/test-send", requireAdmin, campaignUpload.single("attachment"), async (req, res) => {
+    try {
+      const { subject, body, senderName, replyTo, testEmail } = req.body as Record<string, string>;
+      if (!testEmail) return res.status(400).json({ error: "testEmail required" });
+      if (!subject) return res.status(400).json({ error: "subject required" });
+      await sendCampaignEmail({
+        to: testEmail,
+        name: "Test Recipient",
+        subject,
+        body: body || "",
+        senderName: senderName || "Matcha On Ice Team",
+        replyTo: replyTo || "hello@matchaonice.com",
+        pdfBuffer: req.file?.buffer,
+        pdfFilename: req.file?.originalname,
+      });
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(502).json({ error: err?.message || "Send failed" });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/send", requireAdmin, campaignUpload.single("attachment"), async (req, res) => {
+    try {
+      const { id, subject, body, senderName, replyTo, contacts } = req.body as Record<string, string>;
+      if (!subject?.trim()) return res.status(400).json({ error: "subject required" });
+      if (!body?.trim()) return res.status(400).json({ error: "body required" });
+      let parsed: { name: string; email: string }[] = [];
+      if (contacts) {
+        try { parsed = campaignContactsSchema.parse(JSON.parse(contacts)); } catch (e: any) {
+          return res.status(400).json({ error: "Invalid contacts: " + e.message });
+        }
+      }
+      if (parsed.length === 0) return res.status(400).json({ error: "At least one recipient required" });
+      const user = req.user as any;
+      let campaign;
+      if (id) {
+        const existing = await storage.getEmailCampaign(id);
+        if (!existing) return res.status(404).json({ error: "Campaign not found" });
+        if (existing.status !== "draft") {
+          return res.status(409).json({ error: `Campaign already has status "${existing.status}"` });
+        }
+        campaign = await storage.updateEmailCampaign(id, {
+          subject, body,
+          senderName: senderName || "Matcha On Ice Team",
+          replyTo: replyTo || "hello@matchaonice.com",
+          attachmentFilename: req.file?.originalname || existing.attachmentFilename,
+          attachmentSize: req.file?.size || existing.attachmentSize,
+          totalRecipients: parsed.length,
+          status: "queued",
+        });
+        if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+        if (req.file) saveCampaignAttachment(id, req.file.buffer, req.file.originalname);
+        const existingRecipients = await storage.listCampaignRecipients(id);
+        if (existingRecipients.length === 0) {
+          await storage.bulkCreateCampaignRecipients(
+            parsed.map((c) => ({ campaignId: id, name: c.name, email: c.email, status: "pending" })),
+          );
+        }
+      } else {
+        campaign = await storage.createEmailCampaign({
+          senderName: senderName || "Matcha On Ice Team",
+          replyTo: replyTo || "hello@matchaonice.com",
+          subject, body,
+          attachmentFilename: req.file?.originalname || null,
+          attachmentSize: req.file?.size || null,
+          totalRecipients: parsed.length,
+          status: "queued",
+          createdBy: user?.username || null,
+        });
+        if (req.file) saveCampaignAttachment(campaign.id, req.file.buffer, req.file.originalname);
+        await storage.bulkCreateCampaignRecipients(
+          parsed.map((c) => ({ campaignId: campaign!.id, name: c.name, email: c.email, status: "pending" })),
+        );
+      }
+      res.json({ campaign });
+      processCampaignSends(campaign.id).catch((e) => console.error("processCampaignSends error:", e));
+    } catch (err: any) {
+      console.error("Campaign send error:", err);
+      res.status(500).json({ error: err?.message || "Failed to start campaign" });
+    }
+  });
+
+  app.get("/api/admin/email-campaigns", requireAdmin, async (_req, res) => {
+    try {
+      const campaigns = await storage.listEmailCampaigns();
+      res.json(campaigns);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to fetch campaigns" });
+    }
+  });
+
+  app.get("/api/admin/email-campaigns/:id", requireAdmin, async (req, res) => {
+    try {
+      const campaign = await storage.getEmailCampaign(req.params.id);
+      if (!campaign) return res.status(404).json({ error: "Not found" });
+      const recipients = await storage.listCampaignRecipients(campaign.id);
+      res.json({ campaign, recipients });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to fetch campaign" });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/:id/retry-failed", requireAdmin, async (req, res) => {
+    try {
+      const campaign = await storage.getEmailCampaign(req.params.id);
+      if (!campaign) return res.status(404).json({ error: "Not found" });
+      if (campaign.status !== "completed" && campaign.status !== "sending") {
+        return res.status(409).json({ error: "Campaign is not in a retryable state" });
+      }
+      const attachment = loadCampaignAttachment(campaign.id);
+      if (!attachment) return res.status(400).json({ error: "Attachment not found — re-upload the PDF before retrying" });
+      const recipients = await storage.listCampaignRecipients(campaign.id);
+      const failedCount = recipients.filter((r) => r.status === "failed").length;
+      if (failedCount === 0) return res.status(400).json({ error: "No failed recipients to retry" });
+      await storage.updateEmailCampaign(campaign.id, { status: "sending" });
+      res.json({ ok: true, retrying: failedCount });
+      processCampaignSends(campaign.id).catch((e) => console.error("retry processCampaignSends error:", e));
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to retry campaign" });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/:id/recipients/:recipientId/retry", requireAdmin, async (req, res) => {
+    try {
+      const campaign = await storage.getEmailCampaign(req.params.id);
+      if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+      const recipients = await storage.listCampaignRecipients(campaign.id);
+      const recipient = recipients.find((r) => r.id === req.params.recipientId);
+      if (!recipient) return res.status(404).json({ error: "Recipient not found" });
+      if (recipient.status !== "failed") return res.status(409).json({ error: "Recipient is not in failed state" });
+      const attachment = loadCampaignAttachment(campaign.id);
+      if (!attachment) return res.status(400).json({ error: "Attachment not found" });
+      try {
+        const sendResult = await sendCampaignEmail({
+          to: recipient.email, name: recipient.name,
+          subject: campaign.subject, body: campaign.body,
+          senderName: campaign.senderName, replyTo: campaign.replyTo,
+          pdfBuffer: attachment.buffer, pdfFilename: attachment.filename,
+        });
+        await storage.updateCampaignRecipient(recipient.id, { status: "sent", sentAt: new Date(), error: null, messageId: sendResult.messageIdHeader, threadId: sendResult.threadId });
+        const sentNow = await storage.countCampaignRecipientsByStatus(campaign.id, "sent");
+        const failedNow = await storage.countCampaignRecipientsByStatus(campaign.id, "failed");
+        await storage.updateEmailCampaign(campaign.id, { sentCount: sentNow, failedCount: failedNow });
+        res.json({ ok: true });
+      } catch (sendErr: any) {
+        await storage.updateCampaignRecipient(recipient.id, { status: "failed", error: sendErr?.message || String(sendErr) });
+        res.status(502).json({ error: sendErr?.message || "Send failed" });
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to retry recipient" });
+    }
+  });
+
+  app.delete("/api/admin/email-campaigns/:id", requireAdmin, async (req, res) => {
+    try {
+      const deleted = await storage.deleteEmailCampaign(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "Campaign not found" });
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to delete campaign" });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/:id/check-replies", requireAdmin, async (req, res) => {
+    try {
+      const campaign = await storage.getEmailCampaign(req.params.id);
+      if (!campaign) return res.status(404).json({ error: "Not found" });
+      const recipients = await storage.listCampaignRecipients(campaign.id);
+      const sentRecipients = recipients.filter((r) => r.status === "sent" && !r.repliedAt);
+      const startedAtMs = campaign.startedAt
+        ? new Date(campaign.startedAt).getTime()
+        : new Date(campaign.createdAt).getTime();
+      const repliedIds = await checkCampaignReplies(
+        sentRecipients.map((r) => ({ recipientId: r.id, email: r.email, messageIdHeader: r.messageId, threadId: r.threadId })),
+        startedAtMs,
+      );
+      let newReplies = 0;
+      for (const r of sentRecipients) {
+        if (repliedIds.has(r.id)) { await storage.updateCampaignRecipient(r.id, { repliedAt: new Date() }); newReplies++; }
+      }
+      const totalReplied = recipients.filter((r) => r.repliedAt).length + newReplies;
+      await storage.updateEmailCampaign(campaign.id, { repliedCount: totalReplied });
+      res.json({ ok: true, newReplies, totalReplied });
+    } catch (err: any) {
+      console.error("Reply check error:", err);
+      res.status(500).json({ error: err?.message || "Failed to check replies" });
     }
   });
 }
