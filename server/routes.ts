@@ -311,6 +311,57 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  app.patch("/api/admin/tickets/:id", requireAdmin, async (req, res) => {
+    try {
+      const ticket = await storage.getTicket(req.params.id);
+      if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+      const schema = z.object({
+        purchaserName: z.string().min(1).max(300).optional(),
+        purchaserEmail: z.string().email().max(320).optional(),
+        eventId: z.string().uuid().optional(),
+        resend: z.boolean().optional(),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Invalid data", details: parsed.error.flatten() });
+
+      const { purchaserName, purchaserEmail, eventId, resend } = parsed.data;
+
+      if (eventId) {
+        const ev = await storage.getEvent(eventId);
+        if (!ev) return res.status(404).json({ error: "Event not found" });
+      }
+
+      const updateData: { purchaserName?: string; purchaserEmail?: string; eventId?: string } = {};
+      if (purchaserName !== undefined) updateData.purchaserName = purchaserName;
+      if (purchaserEmail !== undefined) updateData.purchaserEmail = purchaserEmail;
+      if (eventId !== undefined) updateData.eventId = eventId;
+
+      const updated = await storage.updateTicket(ticket.id, updateData);
+      if (!updated) return res.status(500).json({ error: "Failed to update ticket" });
+
+      const allEvents = await storage.listEvents();
+      const eventMap = new Map(allEvents.map(e => [e.id, e]));
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const ev = eventMap.get(updated.eventId);
+      const calDate = ev?.calendarDate ? new Date(ev.calendarDate) : null;
+      const archived = calDate ? calDate < today : false;
+      const enriched = { ...updated, eventName: ev?.name || "", eventDate: ev?.date || "", calendarDate: ev?.calendarDate || null, archived };
+
+      if (resend) {
+        const { sendReissuedTicketEmail } = await import("./emailService");
+        sendReissuedTicketEmail({ ticket: updated, event: ev }).catch(err =>
+          console.error("⚠️ Reissued email send failed (non-blocking):", err)
+        );
+      }
+
+      res.json(enriched);
+    } catch (err) {
+      console.error("Edit ticket error:", err);
+      res.status(500).json({ error: "Failed to edit ticket" });
+    }
+  });
+
   app.get("/api/ticket/:urlSlug", async (req, res) => {
     try {
       const ticket = await storage.getTicketByUrl(req.params.urlSlug);

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Search, CheckCircle2, Circle, XCircle,
-  ExternalLink, Ticket, Archive, CalendarDays, RotateCcw, Loader2,
+  ExternalLink, Ticket, Archive, CalendarDays, RotateCcw, Loader2, Pencil, Mail,
 } from "lucide-react";
 import deleteTicketIcon from "@assets/delete-ticket-32_1775730554904.png";
 import AppLayout from "@/components/AppLayout";
@@ -26,6 +26,14 @@ interface TicketData {
   archived: boolean;
 }
 
+interface EventData {
+  id: string;
+  name: string;
+  date: string;
+  eventType: string;
+  calendarDate: string | null;
+}
+
 type FilterTab = "all" | "valid" | "used" | "courtesy" | "cancelled" | "archived";
 
 interface TicketsPageProps {
@@ -45,6 +53,59 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
   const [reactivatingIds, setReactivatingIds] = useState<Set<string>>(new Set());
   const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
   const [confirmCancelTicket, setConfirmCancelTicket] = useState<TicketData | null>(null);
+
+  const [editingTicket, setEditingTicket] = useState<TicketData | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editEventId, setEditEventId] = useState("");
+
+  const { data: ticketList } = useQuery<TicketData[]>({ queryKey: ["/api/tickets"] });
+  const { data: eventList } = useQuery<EventData[]>({ queryKey: ["/api/events"], queryFn: () =>
+    apiRequest("GET", "/api/events?includeArchived=true").then(r => r.json())
+  });
+
+  function openEditModal(ticket: TicketData) {
+    setEditingTicket(ticket);
+    setEditName(ticket.purchaserName);
+    setEditEmail(ticket.purchaserEmail);
+    setEditEventId(ticket.eventId);
+  }
+
+  function closeEditModal() {
+    setEditingTicket(null);
+    setEditName("");
+    setEditEmail("");
+    setEditEventId("");
+  }
+
+  const editMutation = useMutation({
+    mutationFn: async ({ ticketId, resend }: { ticketId: string; resend: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/admin/tickets/${ticketId}`, {
+        purchaserName: editName.trim(),
+        purchaserEmail: editEmail.trim(),
+        eventId: editEventId,
+        resend,
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error || "Failed to update ticket");
+      }
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
+      closeEditModal();
+      toast({
+        title: "Ticket updated",
+        description: vars.resend
+          ? "Ticket saved and reissue email sent."
+          : "Ticket information has been updated.",
+      });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error updating ticket", description: err.message, variant: "destructive" });
+    },
+  });
 
   const reactivateMutation = useMutation({
     mutationFn: async (ticketId: string) => {
@@ -80,7 +141,6 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
     },
   });
 
-  const { data: ticketList } = useQuery<TicketData[]>({ queryKey: ["/api/tickets"] });
   const upcomingTickets = useMemo(() => (ticketList || []).filter(t => !t.archived), [ticketList]);
   const archivedTickets = useMemo(() => (ticketList || []).filter(t => t.archived), [ticketList]);
 
@@ -136,6 +196,17 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
     { key: "cancelled", label: "Cancelled", count: upcomingStats.cancelled },
     { key: "archived", label: "Archived", count: archivedTickets.length, icon: Archive },
   ];
+
+  const editFormValid = editName.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editEmail.trim()) && editEventId;
+
+  const sortedEvents = useMemo(() => {
+    if (!eventList) return [];
+    return [...eventList].sort((a, b) => {
+      const da = a.calendarDate ? new Date(a.calendarDate).getTime() : 0;
+      const db = b.calendarDate ? new Date(b.calendarDate).getTime() : 0;
+      return db - da;
+    });
+  }, [eventList]);
 
   return (
     <AppLayout dark={dark} toggleTheme={toggleTheme} onLogout={onLogout} user={user} activePath="/tickets" data-testid="tickets-page">
@@ -232,7 +303,15 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium truncate">{ticket.purchaserName}</p>
+                        <button
+                          onClick={() => openEditModal(ticket)}
+                          className="text-sm font-medium truncate hover:text-primary transition-colors text-left"
+                          data-testid={`button-edit-${ticket.id}`}
+                          title="Edit ticket"
+                        >
+                          {ticket.purchaserName}
+                        </button>
+                        <Pencil className="h-3 w-3 text-muted-foreground/50 flex-shrink-0" />
                         {!ticket.stripeSessionId && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-primary/10 text-primary">Courtesy</span>
                         )}
@@ -334,6 +413,110 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                 data-testid="button-cancel-confirm"
               >
                 Cancel ticket
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingTicket && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={closeEditModal}
+          data-testid="modal-edit-ticket"
+        >
+          <div
+            className="bg-card border border-card-border rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 flex-shrink-0">
+                <Pencil className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">Edit Ticket</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Update name, email, or assigned event.</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none bg-muted/40 border border-card-border placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
+                  placeholder="Full name"
+                  data-testid="input-edit-name"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Email</label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none bg-muted/40 border border-card-border placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
+                  placeholder="email@example.com"
+                  data-testid="input-edit-email"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Event</label>
+                <select
+                  value={editEventId}
+                  onChange={(e) => setEditEventId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none bg-muted/40 border border-card-border focus:ring-2 focus:ring-primary/30"
+                  data-testid="select-edit-event"
+                >
+                  <option value="">Select event...</option>
+                  {sortedEvents.map((ev) => (
+                    <option key={ev.id} value={ev.id}>
+                      {ev.name}{ev.date ? ` · ${ev.date}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 px-3 py-2.5 flex gap-2 items-start">
+              <span className="text-amber-500 text-sm mt-0.5">ℹ️</span>
+              <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                The QR code will remain the same — only the displayed information changes. Use <strong>Save & Resend</strong> to send an updated email with the new ticket details.
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={closeEditModal}
+                disabled={editMutation.isPending}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-muted/50 hover:bg-muted/70 transition-colors disabled:opacity-50"
+                data-testid="button-edit-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => editMutation.mutate({ ticketId: editingTicket.id, resend: false })}
+                disabled={!editFormValid || editMutation.isPending}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="button-edit-save"
+              >
+                {editMutation.isPending && !editMutation.variables?.resend
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : null}
+                Save
+              </button>
+              <button
+                onClick={() => editMutation.mutate({ ticketId: editingTicket.id, resend: true })}
+                disabled={!editFormValid || editMutation.isPending}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-[#94a779] text-white hover:bg-[#7a8f63] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="button-edit-save-resend"
+              >
+                {editMutation.isPending && editMutation.variables?.resend
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Mail className="h-3.5 w-3.5" />}
+                Save & Resend
               </button>
             </div>
           </div>

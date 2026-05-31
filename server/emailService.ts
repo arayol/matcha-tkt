@@ -616,6 +616,84 @@ function buildTicketEmailHtml(params: {
 </html>`;
 }
 
+export async function sendReissuedTicketEmail(params: {
+  ticket: any;
+  event: any;
+}) {
+  const { ticket, event } = params;
+
+  try {
+    const gmail = await getUncachableGmailClient();
+    const senderEmail = getSenderEmail();
+    const fromHeader = `Matcha On Ice <${senderEmail}>`;
+
+    let locationStreet: string | null = null;
+    let locationCity: string | null = null;
+    let locationZip: string | null = null;
+    if (event?.date && event.date !== "TBD") {
+      try {
+        const { storage } = await import("./storage");
+        const eventDateNames = await storage.listEventDateNames();
+        const mapping = eventDateNames.find((edn: any) => edn.eventDate === event.date);
+        if (mapping) {
+          locationStreet = mapping.locationStreet;
+          locationCity = mapping.locationCity;
+          locationZip = mapping.locationZip;
+        }
+      } catch {}
+    }
+
+    const pdfBuffer = await generateTicketPDF(ticket, event, { locationStreet, locationCity, locationZip });
+    const pdfFilename = `ticket-${ticket.ticketUrl}.pdf`;
+
+    const baseHtml = buildTicketEmailHtml({
+      name: ticket.purchaserName,
+      eventName: event?.name || "Matcha On Ice Event",
+      eventDate: event?.date || "TBD",
+      eventTime: event?.time || "TBD",
+      eventLocation: event?.location || "San Diego, CA",
+      ticketType: ticket.ticketType || "General",
+      ticketUrl: ticket.ticketUrl,
+      isCourtesy: false,
+      locationStreet,
+      locationCity,
+      locationZip,
+    });
+
+    const reissueBanner = `
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color:#7c3400;margin-bottom:0;">
+  <tr><td style="padding:14px 24px;text-align:center;">
+    <p style="margin:0;font-family:'Jost',Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;color:#ffffff;letter-spacing:0.5px;">
+      ⚠️ REISSUED TICKET — This is your updated ticket. Please disregard any previous email and use this one for entry.
+    </p>
+  </td></tr>
+</table>`;
+
+    const htmlBody = baseHtml.replace('<div class="email-container">', `<div class="email-container">${reissueBanner}`);
+
+    const rawMessage = makeRfc2822({
+      to: ticket.purchaserEmail,
+      from: fromHeader,
+      subject: `[REISSUED] Your ticket for ${event?.name || "Matcha On Ice"} — updated`,
+      htmlBody,
+      pdfBuffer,
+      pdfFilename,
+      logoBuffer: LOGO_BUFFER,
+    });
+
+    await gmail.users.messages.send({
+      userId: "me",
+      requestBody: { raw: rawMessage },
+    });
+
+    console.log(`📧 Reissued ticket email sent to ${ticket.purchaserEmail} for ticket ${ticket.id}`);
+    return true;
+  } catch (err) {
+    console.error("❌ Failed to send reissued ticket email:", err);
+    return false;
+  }
+}
+
 export async function sendTicketEmail(params: {
   ticket: any;
   event: any;
