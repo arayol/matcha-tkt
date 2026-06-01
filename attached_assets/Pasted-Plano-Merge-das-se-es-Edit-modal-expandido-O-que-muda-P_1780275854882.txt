@@ -1,0 +1,43 @@
+Plano: Merge das seções + Edit modal expandido
+O que muda
+Parte 1 — Merge das duas seções em uma tabela unificada
+A tabela Events absorve tudo do Event Names by Date. A lógica é: para cada Event, buscar o registro de event_date_names com a mesma eventDate == event.date e exibir/editar os campos de localização junto. A seção "Event Names by Date" separada é removida.
+
+Linhas da tabela unificada:
+
+Date	Name	Location	Tickets	Actions
+Feb 26th	Valentine's Day Matcha	1234 Main St, SD	42	✏️ ✂️ 🔀 🗑️
+Se um Event não tem entry em event_date_names → coluna Location fica vazia (editável no modal)
+O formulário de "Create Event Name" (newEventDate + newEventName + location) é descontinuado — a criação de localização passa a ser feita no modal de edição ou no Add Event dialog
+Parte 2 — Edit modal expandido (Dialog, não inline)
+O lápis atual abre edição inline na própria linha da tabela com só Name + Date. Isso vira um <Dialog> com todos os campos:
+
+Campo	Fonte	Observação
+Name	events.name	texto livre
+Date	events.date	string ex: "Feb 26th"
+Time	events.time	texto livre
+Event Type	events.eventType	Select: Members / General / VIP / Event
+Calendar Date	events.calendarDate	<input type="date">
+Location	events.location	texto livre (ex: "San Diego, CA")
+Capacity	events.capacity	número inteiro
+Street Address	event_date_names.locationStreet	texto livre
+City	event_date_names.locationCity	texto livre
+ZIP	event_date_names.locationZip	texto livre
+O Save faz dois PATCHes em paralelo se necessário: um em /api/admin/events/:id e um em /api/admin/event-date-names/:id (cria se não existia).
+
+Mudanças técnicas
+Backend — server/routes.ts
+PATCH /api/admin/events/:id — extender para aceitar também eventType, capacity, calendarDate (hoje só passa name, date, time, location)
+POST /api/admin/event-date-names — já existe, continua sendo usado para criar/atualizar a entry de localização quando o admin salva o modal
+Nenhuma nova rota necessária
+Frontend — ReconciliationPage.tsx
+Remover o <Card data-testid="card-event-names"> inteiro (Event Names by Date)
+Remover os states e mutations exclusivos do Event Names by Date que não serão mais usados (ex: newEventDate, newEventName, newLocationStreet/City/Zip, editingEdnId, editEdnForm, eventNamesCollapsed, showArchivedEdns)
+Adicionar coluna Location na tabela Events (lê de event_date_names pelo eventDate correspondente)
+Substituir a edição inline da tabela por um <Dialog> com todos os campos acima
+O "Add Event" dialog já tem quase todos os campos — só adicionar Street/City/ZIP
+O que não muda
+Botões Sync, Fix Times, Split, Merge, Delete — mantidos como estão
+Botão Add Event — mantido, só adiciona campos de localização
+Lógica de arquivamento (event_date_names ainda existe no banco, só some da UI como seção separada)
+Reconciliation table abaixo — não toca
