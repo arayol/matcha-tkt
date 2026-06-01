@@ -159,21 +159,17 @@ async function backfillEventCalendarDates() {
     const eventsWithoutDate = allEvents.filter(e => !e.calendarDate && e.date !== "TBD" && e.date !== "");
     if (eventsWithoutDate.length === 0) return;
 
-    const allTickets = await storage.listTickets();
-    const earliestPurchaseByEvent = new Map<string, Date>();
-    for (const t of allTickets) {
-      if (!t.purchasedAt) continue;
-      const purchasedAt = new Date(t.purchasedAt);
-      const existing = earliestPurchaseByEvent.get(t.eventId);
-      if (!existing || purchasedAt < existing) {
-        earliestPurchaseByEvent.set(t.eventId, purchasedAt);
-      }
-    }
+    // Use event_date_names as the authoritative source — only backfill events
+    // that have an admin-confirmed mapping. Use the mapping's createdAt as the
+    // year anchor so the parse is deterministic, not a guess.
+    const dateNames = await storage.listEventDateNames();
+    const dateNameMap = new Map(dateNames.map(dn => [dn.eventDate, dn]));
 
     let updated = 0;
     for (const ev of eventsWithoutDate) {
-      const hint = earliestPurchaseByEvent.get(ev.id);
-      const derived = parseFuzzyEventDate(ev.date, hint);
+      const mapping = dateNameMap.get(ev.date);
+      if (!mapping) continue;
+      const derived = parseFuzzyEventDate(mapping.eventDate, new Date(mapping.createdAt));
       if (!derived) continue;
       await storage.updateEvent(ev.id, { calendarDate: derived });
       updated++;
@@ -226,6 +222,8 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     try {
       const eventList = await storage.listEvents();
       const ticketList = await storage.listTickets();
+      const dateNames = await storage.listEventDateNames();
+      const dateNameMap = new Map(dateNames.map(dn => [dn.eventDate, dn]));
       const countByType = new Map<string, number>();
       for (const t of ticketList) {
         const key = (t.ticketType || "").toLowerCase();
@@ -235,10 +233,12 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const filtered = includeArchived ? eventList : eventList.filter(e => {
-        const calDate = e.calendarDate
-          ? new Date(e.calendarDate)
-          : parseFuzzyEventDate(e.date);
-        if (!calDate) return true;
+        let calDate: Date | null = e.calendarDate ? new Date(e.calendarDate) : null;
+        if (!calDate) {
+          const mapping = dateNameMap.get(e.date);
+          if (mapping) calDate = parseFuzzyEventDate(mapping.eventDate, new Date(mapping.createdAt));
+        }
+        if (!calDate) return true; // unknown date → always show
         return calDate >= today;
       });
       res.json(filtered.map(e => {
@@ -255,13 +255,17 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const ticketList = await storage.listTickets();
       const allEvents = await storage.listEvents();
       const eventMap = new Map(allEvents.map(e => [e.id, e]));
+      const dateNames = await storage.listEventDateNames();
+      const dateNameMap = new Map(dateNames.map(dn => [dn.eventDate, dn]));
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const enriched = ticketList.map(t => {
         const ev = eventMap.get(t.eventId);
-        const calDate = ev?.calendarDate
-          ? new Date(ev.calendarDate)
-          : parseFuzzyEventDate(ev?.date || "", t.purchasedAt ? new Date(t.purchasedAt) : undefined);
+        let calDate: Date | null = ev?.calendarDate ? new Date(ev.calendarDate) : null;
+        if (!calDate && ev?.date) {
+          const mapping = dateNameMap.get(ev.date);
+          if (mapping) calDate = parseFuzzyEventDate(mapping.eventDate, new Date(mapping.createdAt));
+        }
         const archived = calDate ? calDate < today : false;
         return { ...t, eventName: ev?.name || "", eventDate: ev?.date || "", calendarDate: ev?.calendarDate || null, archived };
       });

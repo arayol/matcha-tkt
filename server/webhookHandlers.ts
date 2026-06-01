@@ -85,10 +85,16 @@ export class WebhookHandlers {
           console.log("  ⚠️ Name doesn't match expected pattern, using defaults");
         }
 
-        // Derive calendarDate from the parsed event date string (purchase date = now = hint)
-        const derivedCalendarDate = eventDate !== "TBD"
-          ? parseFuzzyEventDate(eventDate, new Date())
-          : null;
+        // Derive calendarDate from event_date_names mapping (admin-confirmed, deterministic).
+        // Only sets calendarDate when the admin has an explicit mapping for this date string.
+        let derivedCalendarDate: Date | null = null;
+        if (eventDate !== "TBD") {
+          const dateNames = await storage.listEventDateNames();
+          const mapping = dateNames.find(dn => dn.eventDate === eventDate);
+          if (mapping) {
+            derivedCalendarDate = parseFuzzyEventDate(mapping.eventDate, new Date(mapping.createdAt));
+          }
+        }
 
         let dbEvent = await storage.getEventByTypeAndDate(eventType, eventDate);
         if (!dbEvent) {
@@ -110,7 +116,7 @@ export class WebhookHandlers {
             await storage.updateEvent(dbEvent.id, { stripeProductId: product.id });
             console.log("  🔗 Linked stripeProductId to existing event:", dbEvent.id);
           }
-          // Backfill calendarDate on existing event if missing
+          // Backfill calendarDate on existing event if admin mapping is available
           if (!dbEvent.calendarDate && derivedCalendarDate) {
             await storage.updateEvent(dbEvent.id, { calendarDate: derivedCalendarDate });
             dbEvent = { ...dbEvent, calendarDate: derivedCalendarDate };
