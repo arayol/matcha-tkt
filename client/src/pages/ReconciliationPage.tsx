@@ -488,8 +488,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       <div className="space-y-6">
         <div className="hidden md:flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight" data-testid="text-page-title">Reconciliation</h1>
-            <p className="text-sm text-muted-foreground mt-1">Compare CSV imports with Stripe records</p>
+            <h1 className="text-3xl font-semibold tracking-tight" data-testid="text-page-title">Event Management</h1>
           </div>
           <div className="flex items-center gap-2">
             <Button onClick={() => setShowCsvImport(true)} variant="outline" data-testid="button-import-csv">
