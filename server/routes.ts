@@ -1310,8 +1310,16 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   app.patch("/api/admin/events/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, date, time, location } = req.body;
-      const updated = await storage.updateEvent(id, { name, date, time, location });
+      const { name, date, time, location, eventType, capacity, calendarDate } = req.body;
+      const updateData: Record<string, any> = {};
+      if (name !== undefined) updateData.name = name;
+      if (date !== undefined) updateData.date = date;
+      if (time !== undefined) updateData.time = time;
+      if (location !== undefined) updateData.location = location;
+      if (eventType !== undefined) updateData.eventType = eventType;
+      if (capacity !== undefined) updateData.capacity = capacity !== "" && capacity !== null ? parseInt(capacity) : null;
+      if (calendarDate !== undefined) updateData.calendarDate = calendarDate ? new Date(calendarDate) : null;
+      const updated = await storage.updateEvent(id, updateData);
       if (!updated) return res.status(404).json({ error: "Event not found" });
       res.json(updated);
     } catch (err: any) {

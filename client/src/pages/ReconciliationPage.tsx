@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   GitCompareArrows, AlertTriangle, CheckCircle2, XCircle,
   Download, Filter, Edit2, Check, X, Loader2, Calendar, Plus, Trash2, Send, MailCheck,
-  Upload, FileUp, FileSpreadsheet, RotateCcw, Archive, Scissors, Clock, ChevronDown,
+  Upload, FileUp, FileSpreadsheet, RotateCcw, Scissors, Clock, ChevronDown,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -90,17 +90,10 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [filterOrderType, setFilterOrderType] = useState<string>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ billingName: "", email: "", price: "", parsedTicketType: "" });
-  const [newEventDate, setNewEventDate] = useState("");
-  const [newEventName, setNewEventName] = useState("");
-  const [newLocationStreet, setNewLocationStreet] = useState("");
-  const [newLocationCity, setNewLocationCity] = useState("");
-  const [newLocationZip, setNewLocationZip] = useState("");
   const [showTicketDialog, setShowTicketDialog] = useState(false);
-  const [editingEdnId, setEditingEdnId] = useState<string | null>(null);
-  const [editEdnForm, setEditEdnForm] = useState({ eventName: "", locationStreet: "", locationCity: "", locationZip: "" });
-  const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [editEventForm, setEditEventForm] = useState({ name: "", date: "", time: "", location: "" });
-  const [showArchivedEdns, setShowArchivedEdns] = useState(false);
+  const [showEditEventDialog, setShowEditEventDialog] = useState(false);
+  const [editEventTarget, setEditEventTarget] = useState<any>(null);
+  const [editEventForm, setEditEventForm] = useState({ name: "", date: "", time: "", eventType: "", calendarDate: "", location: "", capacity: "", locationStreet: "", locationCity: "", locationZip: "" });
   const [ticketDialogIds, setTicketDialogIds] = useState<string[]>([]);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
@@ -108,9 +101,8 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [confirmDeleteEventId, setConfirmDeleteEventId] = useState<string | null>(null);
   const [showFixTimesDialog, setShowFixTimesDialog] = useState(false);
   const [showAddEventDialog, setShowAddEventDialog] = useState(false);
-  const [addEventForm, setAddEventForm] = useState({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", calendarDate: "" });
+  const [addEventForm, setAddEventForm] = useState({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", calendarDate: "", locationStreet: "", locationCity: "", locationZip: "" });
   const [eventsCollapsed, setEventsCollapsed] = useState(true);
-  const [eventNamesCollapsed, setEventNamesCollapsed] = useState(true);
 
   const [showSplitDialog, setShowSplitDialog] = useState(false);
   const [splitSourceEventId, setSplitSourceEventId] = useState<string | null>(null);
@@ -169,48 +161,16 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
     onError: () => toast({ title: "Failed to update record", variant: "destructive" }),
   });
 
-  const saveEventNameMutation = useMutation({
-    mutationFn: (body: { eventDate: string; eventName: string; locationStreet?: string; locationCity?: string; locationZip?: string }) =>
-      apiRequest("POST", "/api/admin/event-date-names", body),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
-      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      setNewEventDate("");
-      setNewEventName("");
-      setNewLocationStreet("");
-      setNewLocationCity("");
-      setNewLocationZip("");
-      toast({ title: "Event saved" });
+  const saveEditEventMutation = useMutation({
+    mutationFn: async ({ id, eventData, ednData }: { id: string; eventData: Record<string, any>; ednData: { eventDate: string; eventName: string; locationStreet?: string; locationCity?: string; locationZip?: string } }) => {
+      await apiRequest("PATCH", `/api/admin/events/${id}`, eventData);
+      await apiRequest("POST", "/api/admin/event-date-names", ednData);
     },
-    onError: () => toast({ title: "Failed to save event", variant: "destructive" }),
-  });
-
-  const deleteEventNameMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/event-date-names/${id}`),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
-      toast({ title: "Event name removed" });
-    },
-    onError: () => toast({ title: "Failed to remove event name", variant: "destructive" }),
-  });
-
-  const updateEventNameMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Record<string, any> }) =>
-      apiRequest("PATCH", `/api/admin/event-date-names/${id}`, data),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
-      setEditingEdnId(null);
-      toast({ title: "Event updated" });
-    },
-    onError: () => toast({ title: "Failed to update event", variant: "destructive" }),
-  });
-
-  const updateEventMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Record<string, string> }) =>
-      apiRequest("PATCH", `/api/admin/events/${id}`, data),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      setEditingEventId(null);
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
+      setShowEditEventDialog(false);
+      setEditEventTarget(null);
       toast({ title: "Event updated" });
     },
     onError: () => toast({ title: "Failed to update event", variant: "destructive" }),
@@ -239,12 +199,26 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   });
 
   const createEventMutation = useMutation({
-    mutationFn: (body: { name: string; date: string; time: string; eventType: string; location: string; capacity: string; calendarDate: string }) =>
-      apiRequest("POST", "/api/admin/events", body).then(r => r.json()),
+    mutationFn: async (body: { name: string; date: string; time: string; eventType: string; location: string; capacity: string; calendarDate: string; locationStreet: string; locationCity: string; locationZip: string }) => {
+      await apiRequest("POST", "/api/admin/events", {
+        name: body.name, date: body.date, time: body.time, eventType: body.eventType,
+        location: body.location, capacity: body.capacity, calendarDate: body.calendarDate,
+      });
+      if (body.locationStreet || body.locationCity || body.locationZip) {
+        await apiRequest("POST", "/api/admin/event-date-names", {
+          eventDate: body.date,
+          eventName: body.name,
+          locationStreet: body.locationStreet || undefined,
+          locationCity: body.locationCity || undefined,
+          locationZip: body.locationZip || undefined,
+        });
+      }
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
       setShowAddEventDialog(false);
-      setAddEventForm({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", calendarDate: "" });
+      setAddEventForm({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", calendarDate: "", locationStreet: "", locationCity: "", locationZip: "" });
       toast({ title: "Event created" });
     },
     onError: (err: any) => toast({ title: "Failed to create event", description: err?.message, variant: "destructive" }),
@@ -571,237 +545,6 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
               </div>
             </Card>
 
-            <Card data-testid="card-event-names">
-              <CardHeader className="pb-3 cursor-pointer" onClick={() => setEventNamesCollapsed(v => !v)}>
-                <div className="flex items-center justify-between w-full">
-                  <CardTitle className="text-base font-medium flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Event Names by Date
-                  </CardTitle>
-                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${eventNamesCollapsed ? "" : "rotate-180"}`} />
-                </div>
-              </CardHeader>
-              {!eventNamesCollapsed && (<CardContent>
-                <div className="space-y-3 mb-4">
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Event Date</label>
-                      <Input
-                        className="w-[200px]"
-                        placeholder="e.g. LA | May 2nd"
-                        value={newEventDate}
-                        onChange={e => setNewEventDate(e.target.value)}
-                        data-testid="input-new-event-date"
-                      />
-                    </div>
-                    <div className="space-y-1 flex-1 min-w-[200px]">
-                      <label className="text-xs text-muted-foreground">Event Name</label>
-                      <Input
-                        placeholder="e.g. Matcha On Ice Valentine's Day"
-                        value={newEventName}
-                        onChange={(e) => setNewEventName(e.target.value)}
-                        data-testid="input-event-name"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div className="space-y-1 flex-1 min-w-[160px]">
-                      <label className="text-xs text-muted-foreground">Street Address</label>
-                      <Input
-                        placeholder="e.g. 1234 Main St"
-                        value={newLocationStreet}
-                        onChange={(e) => setNewLocationStreet(e.target.value)}
-                        data-testid="input-location-street"
-                      />
-                    </div>
-                    <div className="space-y-1 min-w-[140px]">
-                      <label className="text-xs text-muted-foreground">City</label>
-                      <Input
-                        placeholder="e.g. San Diego"
-                        value={newLocationCity}
-                        onChange={(e) => setNewLocationCity(e.target.value)}
-                        data-testid="input-location-city"
-                      />
-                    </div>
-                    <div className="space-y-1 w-[100px]">
-                      <label className="text-xs text-muted-foreground">Zip Code</label>
-                      <Input
-                        placeholder="e.g. 92101"
-                        value={newLocationZip}
-                        onChange={(e) => setNewLocationZip(e.target.value)}
-                        data-testid="input-location-zip"
-                      />
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        if (newEventDate && newEventName.trim()) {
-                          saveEventNameMutation.mutate({
-                            eventDate: newEventDate,
-                            eventName: newEventName.trim(),
-                            locationStreet: newLocationStreet.trim() || undefined,
-                            locationCity: newLocationCity.trim() || undefined,
-                            locationZip: newLocationZip.trim() || undefined,
-                          });
-                        }
-                      }}
-                      disabled={!newEventDate || !newEventName.trim() || saveEventNameMutation.isPending}
-                      data-testid="button-save-event-name"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Save
-                    </Button>
-                  </div>
-                </div>
-                {eventDateNames && eventDateNames.some(e => !e.archived) ? (
-                  <div className="space-y-2">
-                    {eventDateNames.filter(e => !e.archived).map(edn => (
-                      <div key={edn.id} data-testid={`event-name-row-${edn.id}`}>
-                        {editingEdnId === edn.id ? (
-                          <div className="p-2 rounded-md bg-muted/50 space-y-2">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="font-mono text-xs shrink-0">{edn.eventDate}</Badge>
-                              <Input
-                                className="h-7 text-sm"
-                                value={editEdnForm.eventName}
-                                onChange={e => setEditEdnForm(f => ({ ...f, eventName: e.target.value }))}
-                                placeholder="Event name"
-                                data-testid="input-edit-edn-name"
-                              />
-                            </div>
-                            <div className="grid grid-cols-3 gap-2">
-                              <Input className="h-7 text-xs" placeholder="Street address" value={editEdnForm.locationStreet} onChange={e => setEditEdnForm(f => ({ ...f, locationStreet: e.target.value }))} data-testid="input-edit-edn-street" />
-                              <Input className="h-7 text-xs" placeholder="City" value={editEdnForm.locationCity} onChange={e => setEditEdnForm(f => ({ ...f, locationCity: e.target.value }))} data-testid="input-edit-edn-city" />
-                              <Input className="h-7 text-xs" placeholder="ZIP" value={editEdnForm.locationZip} onChange={e => setEditEdnForm(f => ({ ...f, locationZip: e.target.value }))} data-testid="input-edit-edn-zip" />
-                            </div>
-                            <div className="flex gap-2 justify-end">
-                              <Button size="sm" variant="ghost" onClick={() => setEditingEdnId(null)} data-testid="button-cancel-edit-edn">
-                                <X className="h-3.5 w-3.5 mr-1" />Cancel
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => updateEventNameMutation.mutate({ id: edn.id, data: { eventName: editEdnForm.eventName, locationStreet: editEdnForm.locationStreet || null, locationCity: editEdnForm.locationCity || null, locationZip: editEdnForm.locationZip || null } })}
-                                disabled={!editEdnForm.eventName.trim() || updateEventNameMutation.isPending}
-                                data-testid="button-save-edit-edn"
-                              >
-                                <Check className="h-3.5 w-3.5 mr-1" />Save
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-between gap-3 p-2 rounded-md bg-muted/50">
-                            <div className="flex items-center gap-3 flex-wrap">
-                              <Badge variant="outline" className="font-mono text-xs">{edn.eventDate}</Badge>
-                              <span className="text-sm font-medium" data-testid={`text-event-name-${edn.id}`}>{edn.eventName}</span>
-                              {(edn.locationStreet || edn.locationCity) && (
-                                <span className="text-xs text-muted-foreground">
-                                  📍 {[edn.locationStreet, edn.locationCity, edn.locationZip].filter(Boolean).join(", ")}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-0.5">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => { setEditingEdnId(edn.id); setEditEdnForm({ eventName: edn.eventName, locationStreet: edn.locationStreet || "", locationCity: edn.locationCity || "", locationZip: edn.locationZip || "" }); }}
-                                data-testid={`button-edit-event-name-${edn.id}`}
-                              >
-                                <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => updateEventNameMutation.mutate({ id: edn.id, data: { archived: true } })}
-                                disabled={updateEventNameMutation.isPending}
-                                data-testid={`button-archive-event-name-${edn.id}`}
-                              >
-                                <Archive className="h-3.5 w-3.5 text-muted-foreground" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => deleteEventNameMutation.mutate(edn.id)}
-                                disabled={deleteEventNameMutation.isPending}
-                                data-testid={`button-delete-event-name-${edn.id}`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    {eventDateNames.some(e => e.archived) && (
-                      <div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs text-muted-foreground w-full mt-1"
-                          onClick={() => setShowArchivedEdns(v => !v)}
-                          data-testid="button-toggle-archived-edns"
-                        >
-                          {showArchivedEdns ? "Hide" : "Show"} archived ({eventDateNames.filter(e => e.archived).length})
-                        </Button>
-                        {showArchivedEdns && (
-                          <div className="space-y-2 mt-2">
-                            {eventDateNames.filter(e => e.archived).map(edn => (
-                              <div key={edn.id} className="flex items-center justify-between gap-3 p-2 rounded-md bg-muted/30 opacity-60" data-testid={`event-name-row-archived-${edn.id}`}>
-                                <div className="flex items-center gap-3 flex-wrap">
-                                  <Badge variant="outline" className="font-mono text-xs">{edn.eventDate}</Badge>
-                                  <span className="text-sm">{edn.eventName}</span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => updateEventNameMutation.mutate({ id: edn.id, data: { archived: false } })} data-testid={`button-restore-event-name-${edn.id}`}>
-                                    Restore
-                                  </Button>
-                                  <Button size="icon" variant="ghost" onClick={() => deleteEventNameMutation.mutate(edn.id)} disabled={deleteEventNameMutation.isPending} data-testid={`button-delete-archived-edn-${edn.id}`}>
-                                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-xs text-muted-foreground" data-testid="text-no-event-names">
-                      No event names assigned yet. Select a date and type a name to get started.
-                    </p>
-                    {eventDateNames && eventDateNames.some(e => e.archived) && (
-                      <div className="mt-2">
-                        <Button variant="ghost" size="sm" className="text-xs text-muted-foreground w-full" onClick={() => setShowArchivedEdns(v => !v)} data-testid="button-toggle-archived-edns">
-                          {showArchivedEdns ? "Hide" : "Show"} archived ({eventDateNames.filter(e => e.archived).length})
-                        </Button>
-                        {showArchivedEdns && (
-                          <div className="space-y-2 mt-2">
-                            {eventDateNames.filter(e => e.archived).map(edn => (
-                              <div key={edn.id} className="flex items-center justify-between gap-3 p-2 rounded-md bg-muted/30 opacity-60" data-testid={`event-name-row-archived-${edn.id}`}>
-                                <div className="flex items-center gap-3 flex-wrap">
-                                  <Badge variant="outline" className="font-mono text-xs">{edn.eventDate}</Badge>
-                                  <span className="text-sm">{edn.eventName}</span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => updateEventNameMutation.mutate({ id: edn.id, data: { archived: false } })} data-testid={`button-restore-event-name-${edn.id}`}>
-                                    Restore
-                                  </Button>
-                                  <Button size="icon" variant="ghost" onClick={() => deleteEventNameMutation.mutate(edn.id)} disabled={deleteEventNameMutation.isPending} data-testid={`button-delete-archived-edn-${edn.id}`}>
-                                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>)}
-            </Card>
-
             {eventsData && (
               <Card data-testid="card-events">
                 <CardHeader className="pb-3 cursor-pointer" onClick={() => setEventsCollapsed(v => !v)}>
@@ -855,56 +598,19 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                       <tr className="border-b bg-muted/40">
                         <th className="text-left p-3 font-medium text-xs text-muted-foreground">Date</th>
                         <th className="text-left p-3 font-medium text-xs text-muted-foreground">Name</th>
+                        <th className="text-left p-3 font-medium text-xs text-muted-foreground">Location</th>
                         <th className="text-center p-3 font-medium text-xs text-muted-foreground w-16">Tickets</th>
                         <th className="text-right p-3 font-medium text-xs text-muted-foreground w-28">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {eventsData.map((ev: any) => (
+                      {eventsData.map((ev: any) => {
+                        const edn = eventDateNames?.find((e: any) => e.eventDate === ev.date);
+                        const locationDisplay = edn ? [edn.locationStreet, edn.locationCity, edn.locationZip].filter(Boolean).join(", ") : null;
+                        return (
                         <tr key={ev.id} data-testid={`event-row-${ev.id}`}>
-                          {editingEventId === ev.id ? (
-                            <td colSpan={4} className="p-3">
-                              <div className="space-y-2">
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div className="space-y-1">
-                                    <label className="text-xs text-muted-foreground">Date</label>
-                                    <Input
-                                      className="h-7 text-sm"
-                                      value={editEventForm.date}
-                                      onChange={e => setEditEventForm(f => ({ ...f, date: e.target.value }))}
-                                      placeholder="e.g. Mar 28th"
-                                      data-testid="input-edit-event-date"
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <label className="text-xs text-muted-foreground">Name</label>
-                                    <Input
-                                      className="h-7 text-sm"
-                                      value={editEventForm.name}
-                                      onChange={e => setEditEventForm(f => ({ ...f, name: e.target.value }))}
-                                      placeholder="Event name"
-                                      data-testid="input-edit-event-name"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="flex gap-2 justify-end">
-                                  <Button size="sm" variant="ghost" onClick={() => setEditingEventId(null)} data-testid="button-cancel-edit-event">
-                                    <X className="h-3.5 w-3.5 mr-1" />Cancel
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => updateEventMutation.mutate({ id: ev.id, data: { name: editEventForm.name, date: editEventForm.date, time: editEventForm.time } })}
-                                    disabled={!editEventForm.name.trim() || updateEventMutation.isPending}
-                                    data-testid="button-save-edit-event"
-                                  >
-                                    {updateEventMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Check className="h-3.5 w-3.5 mr-1" />}
-                                    Save
-                                  </Button>
-                                </div>
-                              </div>
-                            </td>
-                          ) : confirmDeleteEventId === ev.id ? (
-                            <td colSpan={4} className="p-3">
+                          {confirmDeleteEventId === ev.id ? (
+                            <td colSpan={5} className="p-3">
                               <div className="flex items-center gap-3 text-sm">
                                 <span className="text-destructive font-medium">Delete "{ev.name}"? This cannot be undone.</span>
                                 <div className="flex gap-2 ml-auto">
@@ -928,6 +634,13 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                                 <Badge variant="outline" className="font-mono text-xs" data-testid={`text-event-date-${ev.id}`}>{ev.date}</Badge>
                               </td>
                               <td className="p-3 font-medium text-sm" data-testid={`text-event-name-${ev.id}`}>{ev.name}</td>
+                              <td className="p-3 text-xs text-muted-foreground" data-testid={`text-event-location-${ev.id}`}>
+                                {locationDisplay ? (
+                                  <span>📍 {locationDisplay}</span>
+                                ) : (
+                                  <span className="text-muted-foreground/40">—</span>
+                                )}
+                              </td>
                               <td className="p-3 text-center">
                                 <Badge variant={ev.ticketCount > 0 ? "secondary" : "outline"} className="text-xs" data-testid={`text-event-tickets-${ev.id}`}>
                                   {ev.ticketCount}
@@ -939,7 +652,23 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                                     size="icon"
                                     variant="ghost"
                                     title="Edit event"
-                                    onClick={() => { setEditingEventId(ev.id); setEditEventForm({ name: ev.name || "", date: ev.date || "", time: ev.time || "", location: ev.location || "" }); }}
+                                    onClick={() => {
+                                      setEditEventTarget(ev);
+                                      const calDate = ev.calendarDate ? new Date(ev.calendarDate).toISOString().split("T")[0] : "";
+                                      setEditEventForm({
+                                        name: ev.name || "",
+                                        date: ev.date || "",
+                                        time: ev.time || "",
+                                        eventType: ev.eventType || "",
+                                        calendarDate: calDate,
+                                        location: ev.location || "",
+                                        capacity: ev.capacity != null ? String(ev.capacity) : "",
+                                        locationStreet: edn?.locationStreet || "",
+                                        locationCity: edn?.locationCity || "",
+                                        locationZip: edn?.locationZip || "",
+                                      });
+                                      setShowEditEventDialog(true);
+                                    }}
                                     data-testid={`button-edit-event-${ev.id}`}
                                   >
                                     <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
@@ -986,7 +715,8 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                             </>
                           )}
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </CardContent>)}
@@ -1271,8 +1001,110 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
         </DialogContent>
       </Dialog>
 
+      <Dialog open={showEditEventDialog} onOpenChange={(open) => { if (!open) { setShowEditEventDialog(false); setEditEventTarget(null); } }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="dialog-edit-event">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit2 className="h-5 w-5" />
+              Edit Event
+            </DialogTitle>
+            <DialogDescription>
+              Update event details and location information.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Name</label>
+              <Input value={editEventForm.name} onChange={e => setEditEventForm(f => ({ ...f, name: e.target.value }))} placeholder="Event name" data-testid="input-edit-event-name" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Date</label>
+                <Input value={editEventForm.date} onChange={e => setEditEventForm(f => ({ ...f, date: e.target.value }))} placeholder="e.g. LA | May 2nd" data-testid="input-edit-event-date" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Time</label>
+                <Input value={editEventForm.time} onChange={e => setEditEventForm(f => ({ ...f, time: e.target.value }))} placeholder="e.g. 11 AM - 1PM" data-testid="input-edit-event-time" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Event Type</label>
+                <Select value={editEventForm.eventType} onValueChange={v => setEditEventForm(f => ({ ...f, eventType: v }))}>
+                  <SelectTrigger data-testid="select-edit-event-type">
+                    <SelectValue placeholder="Select type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Members">Members</SelectItem>
+                    <SelectItem value="General">General</SelectItem>
+                    <SelectItem value="VIP">VIP</SelectItem>
+                    <SelectItem value="event">Event</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Calendar Date</label>
+                <Input type="date" value={editEventForm.calendarDate} onChange={e => setEditEventForm(f => ({ ...f, calendarDate: e.target.value }))} data-testid="input-edit-event-calendar-date" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Location</label>
+                <Input value={editEventForm.location} onChange={e => setEditEventForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. San Diego, CA" data-testid="input-edit-event-location" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Capacity</label>
+                <Input type="number" value={editEventForm.capacity} onChange={e => setEditEventForm(f => ({ ...f, capacity: e.target.value }))} placeholder="e.g. 50" data-testid="input-edit-event-capacity" />
+              </div>
+            </div>
+            <div className="border-t pt-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Address</p>
+              <div className="space-y-2">
+                <Input value={editEventForm.locationStreet} onChange={e => setEditEventForm(f => ({ ...f, locationStreet: e.target.value }))} placeholder="Street address" data-testid="input-edit-event-street" />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input value={editEventForm.locationCity} onChange={e => setEditEventForm(f => ({ ...f, locationCity: e.target.value }))} placeholder="City" data-testid="input-edit-event-city" />
+                  <Input value={editEventForm.locationZip} onChange={e => setEditEventForm(f => ({ ...f, locationZip: e.target.value }))} placeholder="ZIP" data-testid="input-edit-event-zip" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setShowEditEventDialog(false); setEditEventTarget(null); }}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!editEventTarget) return;
+                saveEditEventMutation.mutate({
+                  id: editEventTarget.id,
+                  eventData: {
+                    name: editEventForm.name,
+                    date: editEventForm.date,
+                    time: editEventForm.time,
+                    eventType: editEventForm.eventType,
+                    calendarDate: editEventForm.calendarDate || null,
+                    location: editEventForm.location,
+                    capacity: editEventForm.capacity,
+                  },
+                  ednData: {
+                    eventDate: editEventForm.date,
+                    eventName: editEventForm.name,
+                    locationStreet: editEventForm.locationStreet || undefined,
+                    locationCity: editEventForm.locationCity || undefined,
+                    locationZip: editEventForm.locationZip || undefined,
+                  },
+                });
+              }}
+              disabled={!editEventForm.name.trim() || !editEventForm.date.trim() || saveEditEventMutation.isPending}
+              data-testid="button-confirm-edit-event"
+            >
+              {saveEditEventMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showAddEventDialog} onOpenChange={(open) => { if (!open) setShowAddEventDialog(false); }}>
-        <DialogContent className="max-w-lg" data-testid="dialog-add-event">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="dialog-add-event">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="h-5 w-5" />
@@ -1315,6 +1147,16 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Capacity</label>
                 <Input type="number" placeholder="e.g. 50" value={addEventForm.capacity} onChange={e => setAddEventForm(f => ({ ...f, capacity: e.target.value }))} data-testid="input-add-event-capacity" />
+              </div>
+            </div>
+            <div className="border-t pt-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Address (optional)</p>
+              <div className="space-y-2">
+                <Input placeholder="Street address" value={addEventForm.locationStreet} onChange={e => setAddEventForm(f => ({ ...f, locationStreet: e.target.value }))} data-testid="input-add-event-street" />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input placeholder="City" value={addEventForm.locationCity} onChange={e => setAddEventForm(f => ({ ...f, locationCity: e.target.value }))} data-testid="input-add-event-city" />
+                  <Input placeholder="ZIP" value={addEventForm.locationZip} onChange={e => setAddEventForm(f => ({ ...f, locationZip: e.target.value }))} data-testid="input-add-event-zip" />
+                </div>
               </div>
             </div>
           </div>
