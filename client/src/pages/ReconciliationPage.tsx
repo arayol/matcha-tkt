@@ -169,6 +169,8 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/reconciliation"] });
       setShowEditEventDialog(false);
       setEditEventTarget(null);
       toast({ title: "Event updated" });

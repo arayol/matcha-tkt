@@ -1333,7 +1333,13 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (calendarDate !== undefined) updateData.calendarDate = calendarDate ? new Date(calendarDate) : null;
       const updated = await storage.updateEvent(id, updateData);
       if (!updated) return res.status(404).json({ error: "Event not found" });
-      res.json(updated);
+      // When the event type changes, propagate it to all tickets of this event
+      // so the ticket page badge (which reads ticket.ticketType) reflects it.
+      let ticketsUpdated = 0;
+      if (eventType !== undefined && eventType !== null && eventType !== "") {
+        ticketsUpdated = await storage.updateTicketTypeByEvent(id, eventType);
+      }
+      res.json({ ...updated, ticketsUpdated });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || "Update failed" });
     }

@@ -69,6 +69,7 @@ export interface IStorage {
   updateEvent(id: string, data: Partial<InsertEvent>): Promise<Event | undefined>;
   deleteEvent(id: string): Promise<boolean>;
   reassignTickets(fromEventId: string, toEventId: string): Promise<number>;
+  updateTicketTypeByEvent(eventId: string, ticketType: string): Promise<number>;
 
   listEventDateNames(): Promise<EventDateName[]>;
   upsertEventDateName(data: InsertEventDateName): Promise<EventDateName>;
@@ -186,6 +187,14 @@ export class DatabaseStorage implements IStorage {
     const result = await db.update(tickets)
       .set({ eventId: toEventId })
       .where(eq(tickets.eventId, fromEventId))
+      .returning();
+    return result.length;
+  }
+
+  async updateTicketTypeByEvent(eventId: string, ticketType: string): Promise<number> {
+    const result = await db.update(tickets)
+      .set({ ticketType })
+      .where(eq(tickets.eventId, eventId))
       .returning();
     return result.length;
   }
