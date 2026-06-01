@@ -12,6 +12,7 @@ import { parseExcelBuffer, assertXlsxFilename } from "./excelParser";
 import { insertTicketSchema } from "@shared/schema";
 import { parseCsvContent, checkDatabaseDuplicates } from "./csvParser";
 import { getUncachableStripeClient } from "./stripeClient";
+import { parseFuzzyEventDate } from "./dateUtils";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
@@ -152,8 +153,42 @@ async function seedAdminUser() {
   }
 }
 
+async function backfillEventCalendarDates() {
+  try {
+    const allEvents = await storage.listEvents();
+    const eventsWithoutDate = allEvents.filter(e => !e.calendarDate && e.date !== "TBD" && e.date !== "");
+    if (eventsWithoutDate.length === 0) return;
+
+    const allTickets = await storage.listTickets();
+    const earliestPurchaseByEvent = new Map<string, Date>();
+    for (const t of allTickets) {
+      if (!t.purchasedAt) continue;
+      const purchasedAt = new Date(t.purchasedAt);
+      const existing = earliestPurchaseByEvent.get(t.eventId);
+      if (!existing || purchasedAt < existing) {
+        earliestPurchaseByEvent.set(t.eventId, purchasedAt);
+      }
+    }
+
+    let updated = 0;
+    for (const ev of eventsWithoutDate) {
+      const hint = earliestPurchaseByEvent.get(ev.id);
+      const derived = parseFuzzyEventDate(ev.date, hint);
+      if (!derived) continue;
+      await storage.updateEvent(ev.id, { calendarDate: derived });
+      updated++;
+    }
+    if (updated > 0) {
+      console.log(`📅 Backfilled calendarDate for ${updated} event(s)`);
+    }
+  } catch (err) {
+    console.error("⚠️ backfillEventCalendarDates failed (non-blocking):", err);
+  }
+}
+
 export async function registerRoutes(httpServer: Server, app: Express) {
   await seedAdminUser();
+  backfillEventCalendarDates().catch(() => {});
 
   app.post("/api/auth/login", (req, res, next) => {
     passport.authenticate("local", (err: any, user: any, info: any) => {
@@ -200,8 +235,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const filtered = includeArchived ? eventList : eventList.filter(e => {
-        if (!e.calendarDate) return true;
-        return new Date(e.calendarDate) >= today;
+        const calDate = e.calendarDate
+          ? new Date(e.calendarDate)
+          : parseFuzzyEventDate(e.date);
+        if (!calDate) return true;
+        return calDate >= today;
       });
       res.json(filtered.map(e => {
         const eventTypeKey = (e.eventType || "").toLowerCase();
@@ -221,7 +259,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       today.setHours(0, 0, 0, 0);
       const enriched = ticketList.map(t => {
         const ev = eventMap.get(t.eventId);
-        const calDate = ev?.calendarDate ? new Date(ev.calendarDate) : null;
+        const calDate = ev?.calendarDate
+          ? new Date(ev.calendarDate)
+          : parseFuzzyEventDate(ev?.date || "", t.purchasedAt ? new Date(t.purchasedAt) : undefined);
         const archived = calDate ? calDate < today : false;
         return { ...t, eventName: ev?.name || "", eventDate: ev?.date || "", calendarDate: ev?.calendarDate || null, archived };
       });

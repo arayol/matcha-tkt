@@ -3,6 +3,7 @@ import { getUncachableStripeClient } from "./stripeClient";
 import { storage } from "./storage";
 import { generateTicketQR } from "./qrcode";
 import { sendTicketEmail } from "./emailService";
+import { parseFuzzyEventDate } from "./dateUtils";
 
 export class WebhookHandlers {
   static async processWebhook(payload: Buffer, signature: string) {
@@ -84,6 +85,11 @@ export class WebhookHandlers {
           console.log("  ⚠️ Name doesn't match expected pattern, using defaults");
         }
 
+        // Derive calendarDate from the parsed event date string (purchase date = now = hint)
+        const derivedCalendarDate = eventDate !== "TBD"
+          ? parseFuzzyEventDate(eventDate, new Date())
+          : null;
+
         let dbEvent = await storage.getEventByTypeAndDate(eventType, eventDate);
         if (!dbEvent) {
           dbEvent = await storage.createEvent({
@@ -96,13 +102,19 @@ export class WebhookHandlers {
             stripeProductId: product.id,
             active: true,
             capacity: null,
-            calendarDate: null,
+            calendarDate: derivedCalendarDate,
           });
-          console.log("  📦 Event created:", dbEvent.id, "→", product.name);
+          console.log("  📦 Event created:", dbEvent.id, "→", product.name, derivedCalendarDate ? `| 📅 ${derivedCalendarDate.toDateString()}` : "");
         } else {
           if (!dbEvent.stripeProductId && product.id) {
             await storage.updateEvent(dbEvent.id, { stripeProductId: product.id });
             console.log("  🔗 Linked stripeProductId to existing event:", dbEvent.id);
+          }
+          // Backfill calendarDate on existing event if missing
+          if (!dbEvent.calendarDate && derivedCalendarDate) {
+            await storage.updateEvent(dbEvent.id, { calendarDate: derivedCalendarDate });
+            dbEvent = { ...dbEvent, calendarDate: derivedCalendarDate };
+            console.log("  📅 Set calendarDate on existing event:", dbEvent.id, "→", derivedCalendarDate.toDateString());
           }
           console.log("  📦 Event found:", dbEvent.id, "→", dbEvent.name);
         }
