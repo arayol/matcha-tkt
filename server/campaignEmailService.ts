@@ -96,8 +96,10 @@ function buildCampaignHtml(params: {
   name: string;
   body: string;
   senderName: string;
+  logoSrc?: string;
 }): string {
   const personalizedBody = params.body.replace(/\{\{\s*name\s*\}\}/g, params.name || "there");
+  const logoSrc = params.logoSrc || "cid:matcha-logo";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -109,7 +111,7 @@ function buildCampaignHtml(params: {
   <div style="background-color:#f0ede6;padding:32px 16px;">
     <div style="max-width:600px;margin:0 auto;background-color:#faf9f6;border-radius:4px;overflow:hidden;box-shadow:0 4px 32px rgba(42,37,32,0.10);">
       <div style="background-color:#352d17;padding:28px 32px;text-align:center;">
-        <img src="cid:matcha-logo" alt="Matcha On Ice" style="max-width:280px;width:80%;" />
+        <img src="${logoSrc}" alt="Matcha On Ice" style="max-width:280px;width:80%;" />
       </div>
       <div style="padding:32px 36px;font-size:15px;line-height:1.6;color:#2a2520;">
         ${bodyToHtml(personalizedBody)}
@@ -121,6 +123,21 @@ function buildCampaignHtml(params: {
   </div>
 </body>
 </html>`;
+}
+
+// Renders the branded template HTML for in-browser preview. Unlike the send
+// path, the logo is embedded as a base64 data URI (instead of a `cid:` ref)
+// so it renders in an iframe without the email's MIME attachment.
+export function renderCampaignPreviewHtml(params: {
+  name: string;
+  body: string;
+  senderName: string;
+}): string {
+  const logoSrc =
+    LOGO_BUFFER.length > 0
+      ? `data:image/png;base64,${LOGO_BUFFER.toString("base64")}`
+      : "";
+  return buildCampaignHtml({ ...params, logoSrc });
 }
 
 function makeRfc2822(params: {

@@ -7,7 +7,7 @@ import { storage } from "./storage";
 import { generateTicketQR } from "./qrcode";
 import { generateTicketPDF } from "./pdfGenerator";
 import { sendTicketEmail } from "./emailService";
-import { sendCampaignEmail, getGmailSenderInfo, checkCampaignReplies } from "./campaignEmailService";
+import { sendCampaignEmail, getGmailSenderInfo, checkCampaignReplies, renderCampaignPreviewHtml } from "./campaignEmailService";
 import { parseExcelBuffer, assertXlsxFilename } from "./excelParser";
 import { insertTicketSchema } from "@shared/schema";
 import { parseCsvContent, checkDatabaseDuplicates } from "./csvParser";
@@ -1812,6 +1812,20 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       res.json({ matches });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || "Check failed" });
+    }
+  });
+
+  app.post("/api/admin/email-campaigns/preview", requireAdmin, async (req, res) => {
+    try {
+      const { body, senderName, name } = req.body as Record<string, string>;
+      const html = renderCampaignPreviewHtml({
+        name: name || "there",
+        body: body || "",
+        senderName: senderName || "Matcha On Ice Team",
+      });
+      res.json({ html });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Preview failed" });
     }
   });
 

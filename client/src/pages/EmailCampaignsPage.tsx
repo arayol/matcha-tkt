@@ -17,6 +17,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
 import type { EmailCampaign, EmailCampaignRecipient, EmailContact } from "@shared/schema";
 
 interface PageProps {
@@ -133,6 +136,11 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [useTemplate, setUseTemplate] = useState(false);
+
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewText, setPreviewText] = useState<string | null>(null);
+  const [previewName, setPreviewName] = useState<string>("there");
 
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -323,6 +331,36 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
     setGrammarMatches([]);
     toast({ title: "Applied all suggestions" });
   }
+
+  // Preview renders the email exactly as it will send for the current template
+  // choice. Plain-text mode is rendered client-side; template mode fetches the
+  // branded HTML from the server (logo embedded as a data URI for the iframe).
+  const previewMutation = useMutation({
+    mutationFn: async () => {
+      const sampleName = validContacts[0]?.name?.trim() || "there";
+      if (useTemplate) {
+        const res = await apiRequest("POST", "/api/admin/email-campaigns/preview", {
+          body, senderName, name: sampleName,
+        });
+        const json = (await res.json()) as { html: string };
+        return { mode: "template" as const, html: json.html, name: sampleName };
+      }
+      const text = body.replace(/\{\{\s*name\s*\}\}/g, sampleName);
+      return { mode: "plain" as const, text, name: sampleName };
+    },
+    onSuccess: (data) => {
+      setPreviewName(data.name);
+      if (data.mode === "template") {
+        setPreviewHtml(data.html);
+        setPreviewText(null);
+      } else {
+        setPreviewText(data.text);
+        setPreviewHtml(null);
+      }
+      setPreviewOpen(true);
+    },
+    onError: (err: Error) => toast({ title: "Could not build preview", description: err.message, variant: "destructive" }),
+  });
 
   const testSendMutation = useMutation({
     mutationFn: async () => {
@@ -547,6 +585,19 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
               >
                 <LayoutTemplate className="h-3.5 w-3.5 mr-1.5" />
                 {useTemplate ? "Template: On" : "Template: Off"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => previewMutation.mutate()}
+                disabled={previewMutation.isPending || !body.trim()}
+                data-testid="button-preview"
+                title="See exactly how this email will look when sent, for the current template choice."
+              >
+                {previewMutation.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  : <Eye className="h-3.5 w-3.5 mr-1.5" />}
+                Preview
               </Button>
               {pdfFiles.map(f => (
                 <span key={f.name} className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-muted/50 border border-card-border max-w-[180px]" data-testid={`chip-file-${f.name}`}>
@@ -1012,6 +1063,43 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
           onToggle={() => setHistoryCollapsed(v => !v)}
         />
       </div>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-3xl" data-testid="dialog-preview">
+          <DialogHeader>
+            <DialogTitle>Email preview</DialogTitle>
+            <DialogDescription>
+              {useTemplate ? "Branded template" : "Plain text"} · personalized for{" "}
+              <span className="font-medium text-foreground">{previewName}</span>
+              {subject.trim() ? "" : " · no subject set"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-xl border border-card-border overflow-hidden">
+            <div className="bg-muted/40 px-4 py-2.5 border-b border-card-border text-sm">
+              <span className="text-muted-foreground">Subject: </span>
+              <span className="font-medium" data-testid="text-preview-subject">
+                {subject.replace(/\{\{\s*name\s*\}\}/g, previewName) || "(no subject)"}
+              </span>
+            </div>
+            {previewHtml !== null ? (
+              <iframe
+                title="Email preview"
+                srcDoc={previewHtml}
+                className="w-full h-[60vh] bg-white"
+                data-testid="iframe-preview"
+              />
+            ) : (
+              <pre
+                className="w-full h-[60vh] overflow-auto p-4 text-sm whitespace-pre-wrap font-sans bg-card"
+                data-testid="text-preview-plain"
+              >
+                {previewText}
+              </pre>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
