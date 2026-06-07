@@ -103,7 +103,7 @@ function startReplyPoller() {
 async function processCampaignSends(campaignId: string) {
   const campaign = await storage.getEmailCampaign(campaignId);
   if (!campaign) return;
-  const meta = { subject: campaign.subject, body: campaign.body, senderName: campaign.senderName, replyTo: campaign.replyTo };
+  const meta = { subject: campaign.subject, body: campaign.body, senderName: campaign.senderName, replyTo: campaign.replyTo, useTemplate: campaign.useTemplate };
   const attachments = loadCampaignAttachments(campaignId);
   await storage.updateEmailCampaign(campaignId, { status: "sending", startedAt: new Date() });
   const recipients = await storage.listCampaignRecipients(campaignId);
@@ -113,6 +113,7 @@ async function processCampaignSends(campaignId: string) {
       const sendResult = await sendCampaignEmail({
         to: r.email, name: r.name, subject: meta.subject, body: meta.body,
         senderName: meta.senderName, replyTo: meta.replyTo,
+        useTemplate: meta.useTemplate,
         attachments,
       });
       await storage.updateCampaignRecipient(r.id, { status: "sent", sentAt: new Date(), error: null, messageId: sendResult.messageIdHeader, threadId: sendResult.threadId });
@@ -1725,7 +1726,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/admin/email-campaigns/draft", requireAdmin, campaignUpload.array("attachment", 10), async (req, res) => {
     try {
-      const { id, subject, body, senderName, replyTo, contacts } = req.body as Record<string, string>;
+      const { id, subject, body, senderName, replyTo, contacts, useTemplate } = req.body as Record<string, string>;
       if (!subject?.trim() && !body?.trim()) {
         return res.status(400).json({ error: "At least subject or body is required to save a draft" });
       }
@@ -1749,6 +1750,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           body: body || "",
           senderName: senderName || "Matcha On Ice Team",
           replyTo: replyTo || "contact@matchaonice.com",
+          useTemplate: useTemplate === "true",
           ...(filenamesJson ? { attachmentFilename: filenamesJson, attachmentSize: totalSize } : {}),
           totalRecipients: parsed.length || undefined,
         });
@@ -1760,6 +1762,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           replyTo: replyTo || "contact@matchaonice.com",
           subject: subject || "",
           body: body || "",
+          useTemplate: useTemplate === "true",
           attachmentFilename: filenamesJson,
           attachmentSize: totalSize,
           totalRecipients: parsed.length,
@@ -1823,7 +1826,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/admin/email-campaigns/test-send", requireAdmin, campaignUpload.array("attachment", 10), async (req, res) => {
     try {
-      const { subject, body, senderName, replyTo, testEmail } = req.body as Record<string, string>;
+      const { subject, body, senderName, replyTo, testEmail, useTemplate } = req.body as Record<string, string>;
       if (!testEmail) return res.status(400).json({ error: "testEmail required" });
       if (!subject) return res.status(400).json({ error: "subject required" });
       const files = (req.files || []) as Express.Multer.File[];
@@ -1834,6 +1837,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         body: body || "",
         senderName: senderName || "Matcha On Ice Team",
         replyTo: replyTo || "contact@matchaonice.com",
+        useTemplate: useTemplate === "true",
         attachments: files.map(f => ({ buffer: f.buffer, filename: f.originalname })),
       });
       res.json({ ok: true });
@@ -1844,7 +1848,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/admin/email-campaigns/send", requireAdmin, campaignUpload.array("attachment", 10), async (req, res) => {
     try {
-      const { id, subject, body, senderName, replyTo, contacts } = req.body as Record<string, string>;
+      const { id, subject, body, senderName, replyTo, contacts, useTemplate } = req.body as Record<string, string>;
       if (!subject?.trim()) return res.status(400).json({ error: "subject required" });
       if (!body?.trim()) return res.status(400).json({ error: "body required" });
       let parsed: { name: string; email: string }[] = [];
@@ -1869,6 +1873,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           subject, body,
           senderName: senderName || "Matcha On Ice Team",
           replyTo: replyTo || "contact@matchaonice.com",
+          useTemplate: useTemplate === "true",
           attachmentFilename: filenamesJson || existing.attachmentFilename,
           attachmentSize: totalSize || existing.attachmentSize,
           totalRecipients: parsed.length,
@@ -1887,6 +1892,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           senderName: senderName || "Matcha On Ice Team",
           replyTo: replyTo || "contact@matchaonice.com",
           subject, body,
+          useTemplate: useTemplate === "true",
           attachmentFilename: filenamesJson,
           attachmentSize: totalSize,
           totalRecipients: parsed.length,
@@ -1933,8 +1939,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (campaign.status !== "completed" && campaign.status !== "sending") {
         return res.status(409).json({ error: "Campaign is not in a retryable state" });
       }
-      const attachment = loadCampaignAttachment(campaign.id);
-      if (!attachment) return res.status(400).json({ error: "Attachment not found — re-upload the PDF before retrying" });
       const recipients = await storage.listCampaignRecipients(campaign.id);
       const failedCount = recipients.filter((r) => r.status === "failed").length;
       if (failedCount === 0) return res.status(400).json({ error: "No failed recipients to retry" });
@@ -1954,14 +1958,14 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const recipient = recipients.find((r) => r.id === req.params.recipientId);
       if (!recipient) return res.status(404).json({ error: "Recipient not found" });
       if (recipient.status !== "failed") return res.status(409).json({ error: "Recipient is not in failed state" });
-      const attachment = loadCampaignAttachment(campaign.id);
-      if (!attachment) return res.status(400).json({ error: "Attachment not found" });
+      const attachments = loadCampaignAttachments(campaign.id);
       try {
         const sendResult = await sendCampaignEmail({
           to: recipient.email, name: recipient.name,
           subject: campaign.subject, body: campaign.body,
           senderName: campaign.senderName, replyTo: campaign.replyTo,
-          pdfBuffer: attachment.buffer, pdfFilename: attachment.filename,
+          useTemplate: campaign.useTemplate,
+          attachments,
         });
         await storage.updateCampaignRecipient(recipient.id, { status: "sent", sentAt: new Date(), error: null, messageId: sendResult.messageIdHeader, threadId: sendResult.threadId });
         const sentNow = await storage.countCampaignRecipientsByStatus(campaign.id, "sent");

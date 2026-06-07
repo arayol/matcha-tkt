@@ -164,6 +164,7 @@ export const emailCampaigns = pgTable("email_campaigns", {
   replyTo: text("reply_to").notNull().default("contact@matchaonice.com"),
   subject: text("subject").notNull(),
   body: text("body").notNull(),
+  useTemplate: boolean("use_template").notNull().default(false),
   attachmentFilename: text("attachment_filename"),
   attachmentSize: integer("attachment_size"),
   totalRecipients: integer("total_recipients").notNull().default(0),

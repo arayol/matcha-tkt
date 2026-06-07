@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Mail, Upload, FileText, Send, CheckCircle2, XCircle, Loader2, Paperclip,
-  RotateCcw, AlertTriangle, SpellCheck, Eye, X, Save, RefreshCw, Wand2, Reply, Trash2, ChevronDown,
+  RotateCcw, AlertTriangle, SpellCheck, Eye, X, Save, RefreshCw, Wand2, Reply, Trash2, ChevronDown, LayoutTemplate,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -132,6 +132,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
   const [replyTo, setReplyTo] = useState("contact@matchaonice.com");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [useTemplate, setUseTemplate] = useState(false);
 
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -332,6 +333,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
       fd.append("senderName", senderName);
       fd.append("replyTo", replyTo);
       fd.append("testEmail", testEmail);
+      fd.append("useTemplate", String(useTemplate));
       pdfFiles.forEach(f => fd.append("attachment", f));
       const res = await fetch("/api/admin/email-campaigns/test-send", {
         method: "POST", credentials: "include", body: fd,
@@ -351,6 +353,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
       fd.append("body", body);
       fd.append("senderName", senderName);
       fd.append("replyTo", replyTo);
+      fd.append("useTemplate", String(useTemplate));
       if (validContacts.length > 0) {
         fd.append("contacts", JSON.stringify(validContacts.map((c) => ({ name: c.name, email: c.email }))));
       }
@@ -378,6 +381,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
       fd.append("body", body);
       fd.append("senderName", senderName);
       fd.append("replyTo", replyTo);
+      fd.append("useTemplate", String(useTemplate));
       fd.append("contacts", JSON.stringify(validContacts.map((c) => ({ name: c.name, email: c.email }))));
       pdfFiles.forEach(f => fd.append("attachment", f));
       const res = await fetch("/api/admin/email-campaigns/send", {
@@ -533,6 +537,16 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
               <Button size="sm" variant="outline" onClick={() => pdfInputRef.current?.click()} data-testid="button-attach-pdf">
                 <Paperclip className="h-3.5 w-3.5 mr-1.5" />
                 Attach files
+              </Button>
+              <Button
+                size="sm"
+                variant={useTemplate ? "default" : "outline"}
+                onClick={() => setUseTemplate(v => !v)}
+                data-testid="button-toggle-template"
+                title="When on, emails are wrapped in the branded template (logo header + footer). When off, emails are sent as plain text."
+              >
+                <LayoutTemplate className="h-3.5 w-3.5 mr-1.5" />
+                {useTemplate ? "Template: On" : "Template: Off"}
               </Button>
               {pdfFiles.map(f => (
                 <span key={f.name} className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-muted/50 border border-card-border max-w-[180px]" data-testid={`chip-file-${f.name}`}>

@@ -128,7 +128,8 @@ function makeRfc2822(params: {
   from: string;
   replyTo: string;
   subject: string;
-  htmlBody: string;
+  htmlBody?: string;
+  textBody?: string;
   attachments?: { buffer: Buffer; filename: string }[];
   logoBuffer: Buffer;
   messageId: string;
@@ -137,7 +138,6 @@ function makeRfc2822(params: {
   const mixedBoundary = `MOI_mixed_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const relatedBoundary = `MOI_related_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-  const htmlBase64 = Buffer.from(params.htmlBody, "utf-8").toString("base64");
   const encodedSubject = `=?UTF-8?B?${Buffer.from(params.subject, "utf-8").toString("base64")}?=`;
 
   const lines: string[] = [
@@ -149,28 +149,46 @@ function makeRfc2822(params: {
     `MIME-Version: 1.0`,
     `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
     ``,
-    `--${mixedBoundary}`,
-    `Content-Type: multipart/related; boundary="${relatedBoundary}"`,
-    ``,
-    `--${relatedBoundary}`,
-    `Content-Type: text/html; charset="UTF-8"`,
-    `Content-Transfer-Encoding: base64`,
-    ``,
-    htmlBase64.match(/.{1,76}/g)!.join("\r\n"),
-    ``,
-    `--${relatedBoundary}`,
-    `Content-Type: image/png; name="matcha-logo.png"`,
-    `Content-ID: <matcha-logo>`,
-    `Content-Disposition: inline; filename="matcha-logo.png"`,
-    `Content-Transfer-Encoding: base64`,
-    ``,
-    (params.logoBuffer.length > 0
-      ? (params.logoBuffer.toString("base64").match(/.{1,76}/g) || []).join("\r\n")
-      : ""),
-    ``,
-    `--${relatedBoundary}--`,
-    ``,
   ];
+
+  if (params.textBody !== undefined) {
+    // Plain-text mode: a single text/plain part, no logo/header/footer.
+    const textBase64 = Buffer.from(params.textBody, "utf-8").toString("base64");
+    lines.push(
+      `--${mixedBoundary}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      (textBase64.match(/.{1,76}/g) || []).join("\r\n"),
+      ``,
+    );
+  } else {
+    // Templated HTML mode: html part + inline logo via multipart/related.
+    const htmlBase64 = Buffer.from(params.htmlBody || "", "utf-8").toString("base64");
+    lines.push(
+      `--${mixedBoundary}`,
+      `Content-Type: multipart/related; boundary="${relatedBoundary}"`,
+      ``,
+      `--${relatedBoundary}`,
+      `Content-Type: text/html; charset="UTF-8"`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      htmlBase64.match(/.{1,76}/g)!.join("\r\n"),
+      ``,
+      `--${relatedBoundary}`,
+      `Content-Type: image/png; name="matcha-logo.png"`,
+      `Content-ID: <matcha-logo>`,
+      `Content-Disposition: inline; filename="matcha-logo.png"`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      (params.logoBuffer.length > 0
+        ? (params.logoBuffer.toString("base64").match(/.{1,76}/g) || []).join("\r\n")
+        : ""),
+      ``,
+      `--${relatedBoundary}--`,
+      ``,
+    );
+  }
 
   for (const att of params.attachments || []) {
     if (att.buffer && att.buffer.length > 0 && att.filename) {
@@ -199,34 +217,43 @@ export async function sendCampaignEmail(params: {
   body: string;
   senderName: string;
   replyTo: string;
+  useTemplate?: boolean;
   attachments?: { buffer: Buffer; filename: string }[];
 }): Promise<{ messageIdHeader: string; gmailMessageId: string; threadId: string }> {
   const gmail = await getGmailClient();
   const { email: senderAddress } = await getAccessTokenAndEmail();
 
   const personalizedSubject = params.subject.replace(/\{\{\s*name\s*\}\}/g, params.name || "there");
-  const htmlBody = buildCampaignHtml({
-    name: params.name,
-    body: params.body,
-    senderName: params.senderName,
-  });
 
   const fromHeader = `${params.senderName} <${senderAddress}>`;
   const fromDomain = (senderAddress.split("@")[1] || "matchaonice.com").trim();
   const localId = `moi-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
   const messageIdHeader = `${localId}@${fromDomain}`;
 
-  const raw = makeRfc2822({
+  const rfcParams = {
     to: params.to,
     from: fromHeader,
     replyTo: params.replyTo,
     subject: personalizedSubject,
-    htmlBody,
     attachments: params.attachments,
     logoBuffer: LOGO_BUFFER,
     messageId: localId,
     fromDomain,
-  });
+  };
+
+  const raw = params.useTemplate
+    ? makeRfc2822({
+        ...rfcParams,
+        htmlBody: buildCampaignHtml({
+          name: params.name,
+          body: params.body,
+          senderName: params.senderName,
+        }),
+      })
+    : makeRfc2822({
+        ...rfcParams,
+        textBody: params.body.replace(/\{\{\s*name\s*\}\}/g, params.name || "there"),
+      });
 
   const result = await gmail.users.messages.send({
     userId: "me",
