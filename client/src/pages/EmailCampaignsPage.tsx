@@ -399,6 +399,47 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
     onError: (err: Error) => toast({ title: "Could not save draft", description: err.message, variant: "destructive" }),
   });
 
+  // Reopen a saved draft: pull its persisted fields + recipients back into the
+  // composer so the admin can keep editing. Attachments aren't restored as File
+  // objects (their metadata is preserved server-side on re-save), but everything
+  // else — subject, body, sender, reply-to, template choice, recipients — is.
+  const loadDraftMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("GET", `/api/admin/email-campaigns/${id}`);
+      return (await res.json()) as CampaignDetail;
+    },
+    onSuccess: ({ campaign, recipients }) => {
+      setDraftId(campaign.id);
+      setSubject(campaign.subject || "");
+      setBody(campaign.body || "");
+      setSenderName(campaign.senderName || "Matcha On Ice Team");
+      setReplyTo(campaign.replyTo || "contact@matchaonice.com");
+      setUseTemplate(!!campaign.useTemplate);
+      setGrammarMatches(null);
+      setPdfFiles([]);
+      setSelectedSavedIds(new Set());
+      if (recipients.length > 0) {
+        setContactsMode("upload");
+        setParsed({
+          rows: recipients.map((r, i) => ({ rowNumber: i + 1, name: r.name, email: r.email, valid: true })),
+          validCount: recipients.length,
+          invalidCount: 0,
+          totalRows: recipients.length,
+          fileName: `Draft: ${campaign.subject?.trim() || "untitled"}`,
+        });
+        setContactsImported(true);
+      } else {
+        setParsed(null);
+        setContactsImported(false);
+      }
+      setActiveCampaignId(null);
+      setHistoryCollapsed(true);
+      toast({ title: "Draft loaded", description: "Continue editing where you left off." });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    onError: (err: Error) => toast({ title: "Could not load draft", description: err.message, variant: "destructive" }),
+  });
+
   const sendCampaignMutation = useMutation({
     mutationFn: async () => {
       if (validContacts.length === 0) throw new Error("Import contacts first");
@@ -1044,6 +1085,8 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
           checkingRepliesId={checkingRepliesId}
           onCheckReplies={(id) => checkRepliesMutation.mutate(id)}
           onView={(id) => setActiveCampaignId(id)}
+          onEdit={(id) => loadDraftMutation.mutate(id)}
+          loadingDraftId={loadDraftMutation.isPending ? loadDraftMutation.variables ?? null : null}
           onDelete={async (id) => {
             await apiRequest("DELETE", `/api/admin/email-campaigns/${id}`);
             queryClient.invalidateQueries({ queryKey: ["/api/admin/email-campaigns"] });
@@ -1085,12 +1128,14 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
 }
 
 function HistoryCard({
-  campaigns, checkingRepliesId, onCheckReplies, onView, onDelete, collapsed, onToggle,
+  campaigns, checkingRepliesId, onCheckReplies, onView, onEdit, loadingDraftId, onDelete, collapsed, onToggle,
 }: {
   campaigns: EmailCampaign[];
   checkingRepliesId: string | null;
   onCheckReplies: (id: string) => void;
   onView: (id: string) => void;
+  onEdit: (id: string) => void;
+  loadingDraftId: string | null;
   onDelete: (id: string) => Promise<void>;
   collapsed?: boolean;
   onToggle?: () => void;
@@ -1183,6 +1228,20 @@ function HistoryCard({
                               title="Check Gmail inbox for replies"
                             >
                               {checkingRepliesId === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                            </Button>
+                          )}
+                          {c.status === "draft" && (
+                            <Button
+                              size="sm" variant="default"
+                              onClick={() => onEdit(c.id)}
+                              disabled={loadingDraftId === c.id}
+                              data-testid={`button-edit-draft-${c.id}`}
+                              title="Reopen this draft in the composer"
+                            >
+                              {loadingDraftId === c.id
+                                ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                : <FileText className="h-3.5 w-3.5 mr-1" />}
+                              Continue
                             </Button>
                           )}
                           <Button size="sm" variant="outline" onClick={() => onView(c.id)} data-testid={`button-view-${c.id}`}>
