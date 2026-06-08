@@ -85,7 +85,6 @@ function escapeHtml(s: string): string {
 }
 
 function bodyToHtml(body: string): string {
-  // Convert plain text body into HTML paragraphs / line breaks
   return body
     .split(/\n{2,}/)
     .map((para) => `<p style="margin:0 0 14px 0;">${escapeHtml(para).replace(/\n/g, "<br/>")}</p>`)
@@ -125,9 +124,6 @@ function buildCampaignHtml(params: {
 </html>`;
 }
 
-// Renders the branded template HTML for in-browser preview. Unlike the send
-// path, the logo is embedded as a base64 data URI (instead of a `cid:` ref)
-// so it renders in an iframe without the email's MIME attachment.
 export function renderCampaignPreviewHtml(params: {
   name: string;
   body: string;
@@ -169,17 +165,14 @@ function makeRfc2822(params: {
   ];
 
   if (params.textBody !== undefined) {
-    // Plain-text mode: a single text/plain part, no logo/header/footer and no
-    // HTML tags — the body is sent raw exactly as typed.
-    // Use quoted-printable instead of base64: it preserves line endings
-    // literally (each \r\n in the source becomes a real line break in the
-    // email), avoiding the double-CRLF corruption that base64 + lines.join("\r\n")
-    // produces when the encoded block already contains embedded \r\n separators.
+    // Plain-text mode: use quoted-printable WITHOUT soft line wrapping.
+    // Only '=' and non-ASCII chars are encoded; every paragraph break the user
+    // typed becomes a literal CRLF. Soft-wrapping at 75 chars (as base64 does)
+    // was causing Gmail to render mid-sentence line breaks — this fixes that.
     const normalizedText = params.textBody.replace(/\r\n|\r|\n/g, "\r\n");
     const qpEncoded = normalizedText
       .split("\r\n")
       .map((line) => {
-        // Encode non-ASCII and '=' characters; keep lines ≤76 chars (soft wrap with =\r\n)
         let encoded = "";
         for (const ch of line) {
           const code = ch.charCodeAt(0);
@@ -189,16 +182,10 @@ function makeRfc2822(params: {
             encoded += ch;
           }
         }
-        // Soft-wrap at 75 chars
-        const chunks: string[] = [];
-        while (encoded.length > 75) {
-          chunks.push(encoded.slice(0, 75) + "=");
-          encoded = encoded.slice(75);
-        }
-        chunks.push(encoded);
-        return chunks.join("\r\n");
+        return encoded; // no soft-wrap — long lines are valid in QP
       })
       .join("\r\n");
+
     lines.push(
       `--${mixedBoundary}`,
       `Content-Type: text/plain; charset="UTF-8"`,
@@ -319,13 +306,6 @@ export type ReplyTarget = {
   threadId?: string | null;
 };
 
-// Polls Gmail inbox for replies received after `sinceMs` and correlates them
-// to specific recipients via two signals (both required):
-//   1. From-address matches the recipient's email (avoids cross-recipient leaks)
-//   2. In-Reply-To / References header references the outbound Message-ID
-//      we stored when sending — OR the inbound message lives in the same
-//      Gmail thread we sent on.
-// Excludes auto-replies (Auto-Submitted header) and bounce daemons.
 export async function checkCampaignReplies(
   targets: ReplyTarget[],
   sinceMs: number,
@@ -389,8 +369,6 @@ export async function checkCampaignReplies(
 
         const replyThreadId = msg.data.threadId || "";
 
-        // Per-recipient correlation: require either a header reference to that
-        // specific recipient's outbound Message-Id OR same Gmail thread.
         let matchedRecipient: ReplyTarget | undefined;
         for (const cand of recipientCandidates) {
           const candMsgId = cand.messageIdHeader?.toLowerCase();
