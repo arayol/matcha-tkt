@@ -170,17 +170,41 @@ function makeRfc2822(params: {
 
   if (params.textBody !== undefined) {
     // Plain-text mode: a single text/plain part, no logo/header/footer and no
-    // HTML tags — the body is sent raw exactly as typed. Normalize line endings
-    // to CRLF so recipients' mail clients render the line breaks the user typed
-    // (bare \n is collapsed into one run-on block by several clients).
+    // HTML tags — the body is sent raw exactly as typed.
+    // Use quoted-printable instead of base64: it preserves line endings
+    // literally (each \r\n in the source becomes a real line break in the
+    // email), avoiding the double-CRLF corruption that base64 + lines.join("\r\n")
+    // produces when the encoded block already contains embedded \r\n separators.
     const normalizedText = params.textBody.replace(/\r\n|\r|\n/g, "\r\n");
-    const textBase64 = Buffer.from(normalizedText, "utf-8").toString("base64");
+    const qpEncoded = normalizedText
+      .split("\r\n")
+      .map((line) => {
+        // Encode non-ASCII and '=' characters; keep lines ≤76 chars (soft wrap with =\r\n)
+        let encoded = "";
+        for (const ch of line) {
+          const code = ch.charCodeAt(0);
+          if (ch === "=" || code > 126 || (code < 32 && code !== 9)) {
+            encoded += "=" + code.toString(16).toUpperCase().padStart(2, "0");
+          } else {
+            encoded += ch;
+          }
+        }
+        // Soft-wrap at 75 chars
+        const chunks: string[] = [];
+        while (encoded.length > 75) {
+          chunks.push(encoded.slice(0, 75) + "=");
+          encoded = encoded.slice(75);
+        }
+        chunks.push(encoded);
+        return chunks.join("\r\n");
+      })
+      .join("\r\n");
     lines.push(
       `--${mixedBoundary}`,
       `Content-Type: text/plain; charset="UTF-8"`,
-      `Content-Transfer-Encoding: base64`,
+      `Content-Transfer-Encoding: quoted-printable`,
       ``,
-      (textBase64.match(/.{1,76}/g) || []).join("\r\n"),
+      qpEncoded,
       ``,
     );
   } else {
