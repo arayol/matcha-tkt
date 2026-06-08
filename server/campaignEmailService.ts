@@ -85,7 +85,11 @@ function escapeHtml(s: string): string {
 }
 
 function bodyToHtml(body: string): string {
+  // Normalize all line-ending styles to LF first, so paragraph splitting and
+  // single-break <br/> conversion work regardless of how the client sent them
+  // (a textarea may produce \n while some clients/pastes produce \r\n).
   return body
+    .replace(/\r\n|\r/g, "\n")
     .split(/\n{2,}/)
     .map((para) => `<p style="margin:0 0 14px 0;">${escapeHtml(para).replace(/\n/g, "<br/>")}</p>`)
     .join("");
@@ -124,16 +128,53 @@ function buildCampaignHtml(params: {
 </html>`;
 }
 
-export function renderCampaignPreviewHtml(params: {
+// Clean text-only HTML email: no logo header, no footer, no branding container.
+// Just the body wrapped in a max-width column so line breaks render exactly as
+// typed and the client cannot reflow long lines arbitrarily.
+function buildPlainHtml(params: {
   name: string;
   body: string;
   senderName: string;
 }): string {
+  const personalizedBody = params.body.replace(/\{\{\s*name\s*\}\}/g, params.name || "there");
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${escapeHtml(params.senderName)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#ffffff;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#2a2520;">
+  <div style="max-width:600px;margin:0 auto;padding:24px;font-size:15px;line-height:1.6;color:#2a2520;">
+    ${bodyToHtml(personalizedBody)}
+  </div>
+</body>
+</html>`;
+}
+
+export function renderCampaignPreviewHtml(params: {
+  name: string;
+  body: string;
+  senderName: string;
+  useTemplate?: boolean;
+}): string {
+  if (!params.useTemplate) {
+    return buildPlainHtml({
+      name: params.name,
+      body: params.body,
+      senderName: params.senderName,
+    });
+  }
   const logoSrc =
     LOGO_BUFFER.length > 0
       ? `data:image/png;base64,${LOGO_BUFFER.toString("base64")}`
       : "";
-  return buildCampaignHtml({ ...params, logoSrc });
+  return buildCampaignHtml({
+    name: params.name,
+    body: params.body,
+    senderName: params.senderName,
+    logoSrc,
+  });
 }
 
 function makeRfc2822(params: {
@@ -141,8 +182,8 @@ function makeRfc2822(params: {
   from: string;
   replyTo: string;
   subject: string;
-  htmlBody?: string;
-  textBody?: string;
+  htmlBody: string;
+  inlineLogo: boolean;
   attachments?: { buffer: Buffer; filename: string }[];
   logoBuffer: Buffer;
   messageId: string;
@@ -164,39 +205,10 @@ function makeRfc2822(params: {
     ``,
   ];
 
-  if (params.textBody !== undefined) {
-    // Plain-text mode: use quoted-printable WITHOUT soft line wrapping.
-    // Only '=' and non-ASCII chars are encoded; every paragraph break the user
-    // typed becomes a literal CRLF. Soft-wrapping at 75 chars (as base64 does)
-    // was causing Gmail to render mid-sentence line breaks — this fixes that.
-    const normalizedText = params.textBody.replace(/\r\n|\r|\n/g, "\r\n");
-    const qpEncoded = normalizedText
-      .split("\r\n")
-      .map((line) => {
-        let encoded = "";
-        for (const ch of line) {
-          const code = ch.charCodeAt(0);
-          if (ch === "=" || code > 126 || (code < 32 && code !== 9)) {
-            encoded += "=" + code.toString(16).toUpperCase().padStart(2, "0");
-          } else {
-            encoded += ch;
-          }
-        }
-        return encoded; // no soft-wrap — long lines are valid in QP
-      })
-      .join("\r\n");
+  const htmlBase64Lines = (Buffer.from(params.htmlBody, "utf-8").toString("base64").match(/.{1,76}/g) || []).join("\r\n");
 
-    lines.push(
-      `--${mixedBoundary}`,
-      `Content-Type: text/plain; charset="UTF-8"`,
-      `Content-Transfer-Encoding: quoted-printable`,
-      ``,
-      qpEncoded,
-      ``,
-    );
-  } else {
-    // Templated HTML mode: html part + inline logo via multipart/related.
-    const htmlBase64 = Buffer.from(params.htmlBody || "", "utf-8").toString("base64");
+  if (params.inlineLogo) {
+    // Branded HTML mode: html part + inline logo via multipart/related.
     lines.push(
       `--${mixedBoundary}`,
       `Content-Type: multipart/related; boundary="${relatedBoundary}"`,
@@ -205,7 +217,7 @@ function makeRfc2822(params: {
       `Content-Type: text/html; charset="UTF-8"`,
       `Content-Transfer-Encoding: base64`,
       ``,
-      htmlBase64.match(/.{1,76}/g)!.join("\r\n"),
+      htmlBase64Lines,
       ``,
       `--${relatedBoundary}`,
       `Content-Type: image/png; name="matcha-logo.png"`,
@@ -218,6 +230,17 @@ function makeRfc2822(params: {
         : ""),
       ``,
       `--${relatedBoundary}--`,
+      ``,
+    );
+  } else {
+    // Plain HTML mode: clean text-only HTML, no inline logo. Line breaks are
+    // controlled by the HTML itself (<p>/<br/>) so the client cannot reflow them.
+    lines.push(
+      `--${mixedBoundary}`,
+      `Content-Type: text/html; charset="UTF-8"`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      htmlBase64Lines,
       ``,
     );
   }
@@ -276,6 +299,7 @@ export async function sendCampaignEmail(params: {
   const raw = params.useTemplate
     ? makeRfc2822({
         ...rfcParams,
+        inlineLogo: true,
         htmlBody: buildCampaignHtml({
           name: params.name,
           body: params.body,
@@ -284,7 +308,12 @@ export async function sendCampaignEmail(params: {
       })
     : makeRfc2822({
         ...rfcParams,
-        textBody: params.body.replace(/\{\{\s*name\s*\}\}/g, params.name || "there"),
+        inlineLogo: false,
+        htmlBody: buildPlainHtml({
+          name: params.name,
+          body: params.body,
+          senderName: params.senderName,
+        }),
       });
 
   const result = await gmail.users.messages.send({

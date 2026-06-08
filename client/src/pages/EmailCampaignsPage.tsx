@@ -139,7 +139,6 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
-  const [previewText, setPreviewText] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState<string>("there");
 
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
@@ -333,30 +332,20 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
   }
 
   // Preview renders the email exactly as it will send for the current template
-  // choice. Plain-text mode is rendered client-side; template mode fetches the
-  // branded HTML from the server (logo embedded as a data URI for the iframe).
+  // choice. Both modes are HTML: template mode is the branded layout, plain mode
+  // is clean text-only HTML. The logo is embedded as a data URI for the iframe.
   const previewMutation = useMutation({
     mutationFn: async () => {
       const sampleName = validContacts[0]?.name?.trim() || "there";
-      if (useTemplate) {
-        const res = await apiRequest("POST", "/api/admin/email-campaigns/preview", {
-          body, senderName, name: sampleName,
-        });
-        const json = (await res.json()) as { html: string };
-        return { mode: "template" as const, html: json.html, name: sampleName };
-      }
-      const text = body.replace(/\{\{\s*name\s*\}\}/g, sampleName);
-      return { mode: "plain" as const, text, name: sampleName };
+      const res = await apiRequest("POST", "/api/admin/email-campaigns/preview", {
+        body, senderName, name: sampleName, useTemplate,
+      });
+      const json = (await res.json()) as { html: string };
+      return { html: json.html, name: sampleName };
     },
     onSuccess: (data) => {
       setPreviewName(data.name);
-      if (data.mode === "template") {
-        setPreviewHtml(data.html);
-        setPreviewText(null);
-      } else {
-        setPreviewText(data.text);
-        setPreviewHtml(null);
-      }
+      setPreviewHtml(data.html);
       setPreviewOpen(true);
     },
     onError: (err: Error) => toast({ title: "Could not build preview", description: err.message, variant: "destructive" }),
@@ -581,7 +570,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
                 variant={useTemplate ? "default" : "outline"}
                 onClick={() => setUseTemplate(v => !v)}
                 data-testid="button-toggle-template"
-                title="When on, emails are wrapped in the branded template (logo header + footer). When off, emails are sent as plain text."
+                title="When on, emails are wrapped in the branded template (logo header + footer). When off, emails are sent as clean text-only HTML that preserves your line breaks."
               >
                 <LayoutTemplate className="h-3.5 w-3.5 mr-1.5" />
                 {useTemplate ? "Template: On" : "Template: Off"}
@@ -1069,7 +1058,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
           <DialogHeader>
             <DialogTitle>Email preview</DialogTitle>
             <DialogDescription>
-              {useTemplate ? "Branded template" : "Plain text"} · personalized for{" "}
+              {useTemplate ? "Branded template" : "Clean text-only HTML"} · personalized for{" "}
               <span className="font-medium text-foreground">{previewName}</span>
               {subject.trim() ? "" : " · no subject set"}
             </DialogDescription>
@@ -1082,21 +1071,12 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
                 {subject.replace(/\{\{\s*name\s*\}\}/g, previewName) || "(no subject)"}
               </span>
             </div>
-            {previewHtml !== null ? (
-              <iframe
-                title="Email preview"
-                srcDoc={previewHtml}
-                className="w-full h-[60vh] bg-white"
-                data-testid="iframe-preview"
-              />
-            ) : (
-              <pre
-                className="w-full h-[60vh] overflow-auto p-4 text-sm whitespace-pre-wrap font-sans bg-card"
-                data-testid="text-preview-plain"
-              >
-                {previewText}
-              </pre>
-            )}
+            <iframe
+              title="Email preview"
+              srcDoc={previewHtml ?? ""}
+              className="w-full h-[60vh] bg-white"
+              data-testid="iframe-preview"
+            />
           </div>
         </DialogContent>
       </Dialog>

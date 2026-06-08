@@ -1817,11 +1817,12 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/admin/email-campaigns/preview", requireAdmin, async (req, res) => {
     try {
-      const { body, senderName, name } = req.body as Record<string, string>;
+      const { body, senderName, name, useTemplate } = req.body as Record<string, unknown>;
       const html = renderCampaignPreviewHtml({
-        name: name || "there",
-        body: body || "",
-        senderName: senderName || "Matcha On Ice Team",
+        name: (name as string) || "there",
+        body: (body as string) || "",
+        senderName: (senderName as string) || "Matcha On Ice Team",
+        useTemplate: useTemplate === true || useTemplate === "true",
       });
       res.json({ html });
     } catch (err: any) {
