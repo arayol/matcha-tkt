@@ -169,8 +169,12 @@ function makeRfc2822(params: {
   ];
 
   if (params.textBody !== undefined) {
-    // Plain-text mode: a single text/plain part, no logo/header/footer.
-    const textBase64 = Buffer.from(params.textBody, "utf-8").toString("base64");
+    // Plain-text mode: a single text/plain part, no logo/header/footer and no
+    // HTML tags — the body is sent raw exactly as typed. Normalize line endings
+    // to CRLF so recipients' mail clients render the line breaks the user typed
+    // (bare \n is collapsed into one run-on block by several clients).
+    const normalizedText = params.textBody.replace(/\r\n|\r|\n/g, "\r\n");
+    const textBase64 = Buffer.from(normalizedText, "utf-8").toString("base64");
     lines.push(
       `--${mixedBoundary}`,
       `Content-Type: text/plain; charset="UTF-8"`,
