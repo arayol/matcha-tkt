@@ -85,9 +85,6 @@ function escapeHtml(s: string): string {
 }
 
 function bodyToHtml(body: string): string {
-  // Normalize all line-ending styles to LF first, so paragraph splitting and
-  // single-break <br/> conversion work regardless of how the client sent them
-  // (a textarea may produce \n while some clients/pastes produce \r\n).
   return body
     .replace(/\r\n|\r/g, "\n")
     .split(/\n{2,}/)
@@ -128,9 +125,9 @@ function buildCampaignHtml(params: {
 </html>`;
 }
 
-// Clean text-only HTML email: no logo header, no footer, no branding container.
-// Just the body wrapped in a max-width column so line breaks render exactly as
-// typed and the client cannot reflow long lines arbitrarily.
+// Plain HTML mode: no branding, no container, no max-width.
+// The body fills 100% of the client's reading pane — exactly like a normal
+// email composed in Gmail — so lines never wrap artificially.
 function buildPlainHtml(params: {
   name: string;
   body: string;
@@ -142,12 +139,9 @@ function buildPlainHtml(params: {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${escapeHtml(params.senderName)}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#ffffff;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#2a2520;">
-  <div style="max-width:600px;margin:0 auto;padding:24px;font-size:15px;line-height:1.6;color:#2a2520;">
-    ${bodyToHtml(personalizedBody)}
-  </div>
+<body style="margin:0;padding:0;background-color:#ffffff;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#000000;">
+${bodyToHtml(personalizedBody)}
 </body>
 </html>`;
 }
@@ -159,22 +153,13 @@ export function renderCampaignPreviewHtml(params: {
   useTemplate?: boolean;
 }): string {
   if (!params.useTemplate) {
-    return buildPlainHtml({
-      name: params.name,
-      body: params.body,
-      senderName: params.senderName,
-    });
+    return buildPlainHtml({ name: params.name, body: params.body, senderName: params.senderName });
   }
   const logoSrc =
     LOGO_BUFFER.length > 0
       ? `data:image/png;base64,${LOGO_BUFFER.toString("base64")}`
       : "";
-  return buildCampaignHtml({
-    name: params.name,
-    body: params.body,
-    senderName: params.senderName,
-    logoSrc,
-  });
+  return buildCampaignHtml({ name: params.name, body: params.body, senderName: params.senderName, logoSrc });
 }
 
 function makeRfc2822(params: {
@@ -208,7 +193,6 @@ function makeRfc2822(params: {
   const htmlBase64Lines = (Buffer.from(params.htmlBody, "utf-8").toString("base64").match(/.{1,76}/g) || []).join("\r\n");
 
   if (params.inlineLogo) {
-    // Branded HTML mode: html part + inline logo via multipart/related.
     lines.push(
       `--${mixedBoundary}`,
       `Content-Type: multipart/related; boundary="${relatedBoundary}"`,
@@ -233,8 +217,6 @@ function makeRfc2822(params: {
       ``,
     );
   } else {
-    // Plain HTML mode: clean text-only HTML, no inline logo. Line breaks are
-    // controlled by the HTML itself (<p>/<br/>) so the client cannot reflow them.
     lines.push(
       `--${mixedBoundary}`,
       `Content-Type: text/html; charset="UTF-8"`,
@@ -297,24 +279,8 @@ export async function sendCampaignEmail(params: {
   };
 
   const raw = params.useTemplate
-    ? makeRfc2822({
-        ...rfcParams,
-        inlineLogo: true,
-        htmlBody: buildCampaignHtml({
-          name: params.name,
-          body: params.body,
-          senderName: params.senderName,
-        }),
-      })
-    : makeRfc2822({
-        ...rfcParams,
-        inlineLogo: false,
-        htmlBody: buildPlainHtml({
-          name: params.name,
-          body: params.body,
-          senderName: params.senderName,
-        }),
-      });
+    ? makeRfc2822({ ...rfcParams, inlineLogo: true, htmlBody: buildCampaignHtml({ name: params.name, body: params.body, senderName: params.senderName }) })
+    : makeRfc2822({ ...rfcParams, inlineLogo: false, htmlBody: buildPlainHtml({ name: params.name, body: params.body, senderName: params.senderName }) });
 
   const result = await gmail.users.messages.send({
     userId: "me",
@@ -358,11 +324,7 @@ export async function checkCampaignReplies(
     const fromQ = slice.map((e) => `from:${e}`).join(" OR ");
     const q = `in:inbox after:${sinceSec} (${fromQ}) -from:mailer-daemon -from:postmaster -label:^automated`;
     try {
-      const list = await gmail.users.messages.list({
-        userId: "me",
-        q,
-        maxResults: 100,
-      });
+      const list = await gmail.users.messages.list({ userId: "me", q, maxResults: 100 });
       const messages = list.data.messages || [];
       for (const m of messages) {
         if (!m.id) continue;
