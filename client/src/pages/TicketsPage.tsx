@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
-  Search, CheckCircle2, Circle, XCircle,
+  Search, CheckCircle2, Circle, XCircle, AlertTriangle,
   ExternalLink, Ticket, Archive, CalendarDays, RotateCcw, Loader2, Pencil, Mail,
 } from "lucide-react";
 import deleteTicketIcon from "@assets/delete-ticket-32_1775730554904.png";
@@ -34,7 +34,7 @@ interface EventData {
   calendarDate: string | null;
 }
 
-type FilterTab = "all" | "valid" | "used" | "courtesy" | "cancelled" | "archived";
+type FilterTab = "all" | "valid" | "used" | "courtesy" | "cancelled" | "archived" | "review";
 
 interface TicketsPageProps {
   dark: boolean;
@@ -52,6 +52,7 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
 
   const [reactivatingIds, setReactivatingIds] = useState<Set<string>>(new Set());
   const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
+  const [archivingIds, setArchivingIds] = useState<Set<string>>(new Set());
   const [confirmCancelTicket, setConfirmCancelTicket] = useState<TicketData | null>(null);
 
   const [editingTicket, setEditingTicket] = useState<TicketData | null>(null);
@@ -141,6 +142,28 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
     },
   });
 
+  const archiveMutation = useMutation({
+    mutationFn: async (ticketId: string) => {
+      setArchivingIds(prev => new Set(prev).add(ticketId));
+      const res = await apiRequest("POST", `/api/admin/tickets/${ticketId}/archive`);
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error || "Failed to archive ticket");
+      }
+      return res.json();
+    },
+    onSuccess: (_data, ticketId) => {
+      setArchivingIds(prev => { const s = new Set(prev); s.delete(ticketId); return s; });
+      queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
+      closeEditModal();
+      toast({ title: "Ticket archived", description: "The ticket has been moved to the archive." });
+    },
+    onError: (err: any, ticketId) => {
+      setArchivingIds(prev => { const s = new Set(prev); s.delete(ticketId); return s; });
+      toast({ title: "Failed to archive", description: err.message, variant: "destructive" });
+    },
+  });
+
   const upcomingTickets = useMemo(() => (ticketList || []).filter(t => !t.archived), [ticketList]);
   const archivedTickets = useMemo(() => (ticketList || []).filter(t => t.archived), [ticketList]);
 
@@ -149,7 +172,8 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
     const used = upcomingTickets.filter(t => t.status === "used").length;
     const cancelled = upcomingTickets.filter(t => t.status === "cancelled").length;
     const courtesy = upcomingTickets.filter(t => !t.stripeSessionId).length;
-    return { valid, used, cancelled, courtesy };
+    const pendingReview = upcomingTickets.filter(t => t.status === "pending_review").length;
+    return { valid, used, cancelled, courtesy, pendingReview };
   }, [upcomingTickets]);
 
   const filtered = useMemo(() => {
@@ -157,7 +181,8 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
     return source.filter((t) => {
       const matchesFilter =
         activeFilter === "all" || activeFilter === "archived" ||
-        (activeFilter === "courtesy" ? !t.stripeSessionId : t.status === activeFilter);
+        (activeFilter === "review" ? t.status === "pending_review" :
+         activeFilter === "courtesy" ? !t.stripeSessionId : t.status === activeFilter);
       const s = search.toLowerCase();
       const matchesSearch =
         !search ||
@@ -188,12 +213,13 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
     });
   }, [activeFilter, upcomingTickets, archivedTickets, search, dateFrom, dateTo]);
 
-  const filterTabs: { key: FilterTab; label: string; count: number; icon?: typeof Archive }[] = [
+  const filterTabs: { key: FilterTab; label: string; count: number; icon?: typeof Archive; accent?: string }[] = [
     { key: "all", label: "All", count: upcomingTickets.length },
     { key: "valid", label: "Valid", count: upcomingStats.valid },
     { key: "used", label: "Used", count: upcomingStats.used },
     { key: "courtesy", label: "Courtesy", count: upcomingStats.courtesy },
     { key: "cancelled", label: "Cancelled", count: upcomingStats.cancelled },
+    { key: "review", label: "Pending Review", count: upcomingStats.pendingReview, icon: AlertTriangle, accent: "amber" },
     { key: "archived", label: "Archived", count: archivedTickets.length, icon: Archive },
   ];
 
@@ -259,15 +285,21 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                   onClick={() => setActiveFilter(tab.key)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
                     activeFilter === tab.key
-                      ? "bg-primary text-primary-foreground shadow-soft"
-                      : "bg-muted/40 text-muted-foreground hover:bg-muted/60"
+                      ? tab.accent === "amber"
+                        ? "bg-amber-500 text-white shadow-soft"
+                        : "bg-primary text-primary-foreground shadow-soft"
+                      : tab.accent === "amber"
+                        ? "bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400"
+                        : "bg-muted/40 text-muted-foreground hover:bg-muted/60"
                   }`}
                   data-testid={`filter-${tab.key}`}
                 >
                   {tab.icon && <tab.icon className="h-3 w-3" />}
                   {tab.label}
                   <span className={`text-[10px] px-1 py-0.5 rounded-md ${
-                    activeFilter === tab.key ? "bg-primary-foreground/20" : "bg-muted"
+                    activeFilter === tab.key
+                      ? tab.accent === "amber" ? "bg-white/20" : "bg-primary-foreground/20"
+                      : tab.accent === "amber" ? "bg-amber-200/60 dark:bg-amber-800/40" : "bg-muted"
                   }`}>{tab.count}</span>
                 </button>
               ))}
@@ -279,93 +311,111 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <Ticket className="h-10 w-10 text-muted-foreground/30" />
                 <p className="text-sm text-muted-foreground">
-                  {search ? "No matching tickets" : activeFilter === "archived" ? "No archived tickets" : "No tickets in this category"}
+                  {search ? "No matching tickets" : activeFilter === "archived" ? "No archived tickets" : activeFilter === "review" ? "No tickets pending review" : "No tickets in this category"}
                 </p>
               </div>
             ) : (
               <div className="divide-y divide-card-border">
-                {filtered.map((ticket) => (
-                  <div
-                    key={ticket.id}
-                    className={`flex items-center gap-3 px-4 md:px-6 py-3 hover:bg-muted/30 transition-colors ${ticket.archived ? "opacity-60" : ""}`}
-                    data-testid={`ticket-${ticket.id}`}
-                  >
-                    <div className={`flex h-9 w-9 items-center justify-center rounded-xl flex-shrink-0 ${
-                      ticket.status === "valid"
-                        ? "bg-green-50 text-green-600 dark:bg-green-950/30 dark:text-green-400"
-                        : ticket.status === "used"
-                        ? "bg-yellow-50 text-yellow-600 dark:bg-yellow-950/30 dark:text-yellow-400"
-                        : "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"
-                    }`}>
-                      {ticket.status === "valid" ? <CheckCircle2 className="h-4 w-4" /> :
-                       ticket.status === "used" ? <Circle className="h-4 w-4" /> :
-                       <XCircle className="h-4 w-4" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => openEditModal(ticket)}
-                          className="text-sm font-medium truncate hover:text-primary transition-colors text-left"
-                          data-testid={`button-edit-${ticket.id}`}
-                          title="Edit ticket"
-                        >
-                          {ticket.purchaserName}
-                        </button>
-                        <Pencil className="h-3 w-3 text-muted-foreground/50 flex-shrink-0" />
-                        {!ticket.stripeSessionId && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-primary/10 text-primary">Courtesy</span>
-                        )}
-                        {!ticket.stripeSessionId && ticket.issuedBy && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-muted text-muted-foreground" data-testid={`badge-issuer-${ticket.id}`}>by {ticket.issuedBy}</span>
-                        )}
-                      </div>
-                      <p className="text-xs truncate text-muted-foreground">{ticket.purchaserEmail}</p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <span className="text-[10px] px-2 py-0.5 rounded-md font-medium bg-muted/50 text-foreground">
-                        {ticket.ticketType}
-                      </span>
-                      <p className="text-[10px] mt-0.5 text-muted-foreground">
-                        {ticket.purchasedAt ? new Date(ticket.purchasedAt).toLocaleDateString() : ""}
-                      </p>
-                    </div>
-                    {activeFilter === "archived" && (
-                      <button
-                        onClick={() => reactivateMutation.mutate(ticket.id)}
-                        disabled={reactivatingIds.has(ticket.id)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Reactivate ticket"
-                        data-testid={`button-reactivate-${ticket.id}`}
-                      >
-                        {reactivatingIds.has(ticket.id)
-                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          : <RotateCcw className="h-3.5 w-3.5" />}
-                      </button>
-                    )}
-                    {ticket.status !== "cancelled" && ticket.status !== "used" && (
-                      <button
-                        onClick={() => setConfirmCancelTicket(ticket)}
-                        disabled={cancellingIds.has(ticket.id)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Cancel ticket"
-                        data-testid={`button-cancel-${ticket.id}`}
-                      >
-                        {cancellingIds.has(ticket.id)
-                          ? <Loader2 className="h-3.5 w-3.5 animate-spin text-red-500" />
-                          : <img src={deleteTicketIcon} alt="Cancel" className="h-4 w-4" />}
-                      </button>
-                    )}
-                    <a
-                      href={`/ticket/${ticket.ticketUrl}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 text-muted-foreground hover:bg-muted/50 transition-colors"
-                      data-testid={`link-ticket-${ticket.id}`}
+                {filtered.map((ticket) => {
+                  const isPending = ticket.status === "pending_review";
+                  return (
+                    <div
+                      key={ticket.id}
+                      className={`flex items-center gap-3 px-4 md:px-6 py-3 transition-colors ${
+                        isPending
+                          ? "bg-[#FFF9C4] dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+                          : ticket.archived
+                          ? "opacity-60 hover:bg-muted/30"
+                          : "hover:bg-muted/30"
+                      }`}
+                      data-testid={`ticket-${ticket.id}`}
                     >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
-                  </div>
-                ))}
+                      <div className={`flex h-9 w-9 items-center justify-center rounded-xl flex-shrink-0 ${
+                        isPending
+                          ? "bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400"
+                          : ticket.status === "valid"
+                          ? "bg-green-50 text-green-600 dark:bg-green-950/30 dark:text-green-400"
+                          : ticket.status === "used"
+                          ? "bg-yellow-50 text-yellow-600 dark:bg-yellow-950/30 dark:text-yellow-400"
+                          : "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"
+                      }`}>
+                        {isPending
+                          ? <AlertTriangle className="h-4 w-4" />
+                          : ticket.status === "valid" ? <CheckCircle2 className="h-4 w-4" />
+                          : ticket.status === "used" ? <Circle className="h-4 w-4" />
+                          : <XCircle className="h-4 w-4" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => openEditModal(ticket)}
+                            className="text-sm font-medium truncate hover:text-primary transition-colors text-left"
+                            data-testid={`button-edit-${ticket.id}`}
+                            title="Edit ticket"
+                          >
+                            {ticket.purchaserName}
+                          </button>
+                          <Pencil className="h-3 w-3 text-muted-foreground/50 flex-shrink-0" />
+                          {isPending && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-amber-200 text-amber-800 dark:bg-amber-800/40 dark:text-amber-300">
+                              Pending Review
+                            </span>
+                          )}
+                          {!ticket.stripeSessionId && !isPending && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-primary/10 text-primary">Courtesy</span>
+                          )}
+                          {!ticket.stripeSessionId && ticket.issuedBy && !isPending && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-muted text-muted-foreground" data-testid={`badge-issuer-${ticket.id}`}>by {ticket.issuedBy}</span>
+                          )}
+                        </div>
+                        <p className="text-xs truncate text-muted-foreground">{ticket.purchaserEmail}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <span className="text-[10px] px-2 py-0.5 rounded-md font-medium bg-muted/50 text-foreground">
+                          {ticket.ticketType}
+                        </span>
+                        <p className="text-[10px] mt-0.5 text-muted-foreground">
+                          {ticket.purchasedAt ? new Date(ticket.purchasedAt).toLocaleDateString() : ""}
+                        </p>
+                      </div>
+                      {activeFilter === "archived" && (
+                        <button
+                          onClick={() => reactivateMutation.mutate(ticket.id)}
+                          disabled={reactivatingIds.has(ticket.id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Reactivate ticket"
+                          data-testid={`button-reactivate-${ticket.id}`}
+                        >
+                          {reactivatingIds.has(ticket.id)
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <RotateCcw className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
+                      {ticket.status !== "cancelled" && ticket.status !== "used" && (
+                        <button
+                          onClick={() => setConfirmCancelTicket(ticket)}
+                          disabled={cancellingIds.has(ticket.id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Cancel ticket"
+                          data-testid={`button-cancel-${ticket.id}`}
+                        >
+                          {cancellingIds.has(ticket.id)
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-red-500" />
+                            : <img src={deleteTicketIcon} alt="Cancel" className="h-4 w-4" />}
+                        </button>
+                      )}
+                      <a
+                        href={`/ticket/${ticket.ticketUrl}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 text-muted-foreground hover:bg-muted/50 transition-colors"
+                        data-testid={`link-ticket-${ticket.id}`}
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -430,14 +480,33 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 flex-shrink-0">
-                <Pencil className="h-5 w-5 text-primary" />
+              <div className={`flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0 ${
+                editingTicket.status === "pending_review"
+                  ? "bg-amber-100 dark:bg-amber-950/40"
+                  : "bg-primary/10"
+              }`}>
+                {editingTicket.status === "pending_review"
+                  ? <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  : <Pencil className="h-5 w-5 text-primary" />}
               </div>
               <div>
                 <h3 className="text-sm font-semibold">Edit Ticket</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Update name, email, or assigned event.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {editingTicket.status === "pending_review"
+                    ? "This ticket is pending admin review — fix the fields or archive it."
+                    : "Update name, email, or assigned event."}
+                </p>
               </div>
             </div>
+
+            {editingTicket.status === "pending_review" && (
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700/50 px-3 py-2.5 flex gap-2 items-start">
+                <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                  This ticket has not been sent to the customer yet. Fix the missing fields (date, street address, or name) and use <strong>Save & Send</strong> to deliver it, or click <strong>Archive Ticket</strong> to dismiss it.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-3">
               <div className="space-y-1">
@@ -480,43 +549,58 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
               </div>
             </div>
 
-            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 px-3 py-2.5 flex gap-2 items-start">
-              <span className="text-amber-500 text-sm mt-0.5">ℹ️</span>
-              <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
-                The QR code will remain the same — only the displayed information changes. Use <strong>Save & Resend</strong> to send an updated email with the new ticket details.
-              </p>
-            </div>
+            {editingTicket.status !== "pending_review" && (
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 px-3 py-2.5 flex gap-2 items-start">
+                <span className="text-amber-500 text-sm mt-0.5">ℹ️</span>
+                <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                  The QR code will remain the same — only the displayed information changes. Use <strong>Save & Resend</strong> to send an updated email with the new ticket details.
+                </p>
+              </div>
+            )}
 
-            <div className="flex gap-2 pt-1">
+            <div className="flex flex-col gap-2 pt-1">
+              <div className="flex gap-2">
+                <button
+                  onClick={closeEditModal}
+                  disabled={editMutation.isPending || archiveMutation.isPending}
+                  className="px-4 py-2 rounded-xl text-sm font-medium bg-muted/50 hover:bg-muted/70 transition-colors disabled:opacity-50"
+                  data-testid="button-edit-cancel"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => editMutation.mutate({ ticketId: editingTicket.id, resend: false })}
+                  disabled={!editFormValid || editMutation.isPending || archiveMutation.isPending}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  data-testid="button-edit-save"
+                >
+                  {editMutation.isPending && !editMutation.variables?.resend
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : null}
+                  Save
+                </button>
+                <button
+                  onClick={() => editMutation.mutate({ ticketId: editingTicket.id, resend: true })}
+                  disabled={!editFormValid || editMutation.isPending || archiveMutation.isPending}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-[#94a779] text-white hover:bg-[#7a8f63] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  data-testid="button-edit-save-resend"
+                >
+                  {editMutation.isPending && editMutation.variables?.resend
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Mail className="h-3.5 w-3.5" />}
+                  {editingTicket.status === "pending_review" ? "Save & Send" : "Save & Resend"}
+                </button>
+              </div>
               <button
-                onClick={closeEditModal}
-                disabled={editMutation.isPending}
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-muted/50 hover:bg-muted/70 transition-colors disabled:opacity-50"
-                data-testid="button-edit-cancel"
+                onClick={() => archiveMutation.mutate(editingTicket.id)}
+                disabled={editMutation.isPending || archiveMutation.isPending}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-card-border bg-muted/30 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="button-archive-ticket"
               >
-                Cancel
-              </button>
-              <button
-                onClick={() => editMutation.mutate({ ticketId: editingTicket.id, resend: false })}
-                disabled={!editFormValid || editMutation.isPending}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                data-testid="button-edit-save"
-              >
-                {editMutation.isPending && !editMutation.variables?.resend
+                {archiveMutation.isPending
                   ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : null}
-                Save
-              </button>
-              <button
-                onClick={() => editMutation.mutate({ ticketId: editingTicket.id, resend: true })}
-                disabled={!editFormValid || editMutation.isPending}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-[#94a779] text-white hover:bg-[#7a8f63] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                data-testid="button-edit-save-resend"
-              >
-                {editMutation.isPending && editMutation.variables?.resend
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <Mail className="h-3.5 w-3.5" />}
-                Save & Resend
+                  : <Archive className="h-3.5 w-3.5" />}
+                Archive Ticket
               </button>
             </div>
           </div>

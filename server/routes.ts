@@ -13,6 +13,7 @@ import { insertTicketSchema } from "@shared/schema";
 import { parseCsvContent, checkDatabaseDuplicates } from "./csvParser";
 import { getUncachableStripeClient } from "./stripeClient";
 import { parseFuzzyEventDate, resolveEventCalendarDate } from "./dateUtils";
+import { validateTicketBeforeSend } from "./ticketValidation";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
@@ -339,7 +340,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const enriched = ticketList.map(t => {
         const ev = eventMap.get(t.eventId);
         const calDate = resolveEventCalendarDate(ev, dateNameMap, earliestPurchaseByEvent.get(t.eventId));
-        const archived = calDate ? calDate < today : false;
+        const archived = t.status === "archived" || (calDate ? calDate < today : false);
         return { ...t, eventName: ev?.name || "", eventDate: ev?.date || "", calendarDate: ev?.calendarDate || null, archived };
       });
       res.json(enriched);
@@ -369,6 +370,19 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (err) {
       console.error("Cancel ticket error:", err);
       res.status(500).json({ error: "Failed to cancel ticket" });
+    }
+  });
+
+  app.post("/api/admin/tickets/:id/archive", requireAdmin, async (req, res) => {
+    try {
+      const ticket = await storage.getTicket(req.params.id);
+      if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+      const updated = await storage.updateTicketStatus(ticket.id, "archived");
+      if (!updated) return res.status(500).json({ error: "Failed to archive ticket" });
+      res.json({ message: "Ticket archived", ticket: updated });
+    } catch (err) {
+      console.error("Archive ticket error:", err);
+      res.status(500).json({ error: "Failed to archive ticket" });
     }
   });
 
@@ -465,14 +479,40 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const archived = calDate ? calDate < today : false;
       const enriched = { ...updated, eventName: ev?.name || "", eventDate: ev?.date || "", calendarDate: ev?.calendarDate || null, archived };
 
+      // If ticket was pending review, re-evaluate its status
+      let finalStatus = updated.status;
+      if (ticket.status === "pending_review") {
+        if (resend) {
+          // Admin explicitly sending — promote to valid
+          await storage.updateTicketStatus(updated.id, "valid");
+          finalStatus = "valid";
+        } else {
+          // Re-validate with updated fields to auto-promote if now complete
+          const allDateNames = await storage.listEventDateNames();
+          const dateNameEntry = allDateNames.find(dn => dn.eventDate === (ev?.date || ""));
+          const recheck = validateTicketBeforeSend({
+            purchaserName: updated.purchaserName,
+            eventDate: ev?.date || "",
+            locationStreet: dateNameEntry?.locationStreet ?? null,
+            eventLocation: ev?.location,
+          });
+          if (recheck.valid) {
+            await storage.updateTicketStatus(updated.id, "valid");
+            finalStatus = "valid";
+          }
+        }
+      }
+
+      const enrichedWithStatus = { ...enriched, status: finalStatus };
+
       if (resend) {
         const { sendReissuedTicketEmail } = await import("./emailService");
-        sendReissuedTicketEmail({ ticket: updated, event: ev }).catch(err =>
+        sendReissuedTicketEmail({ ticket: { ...updated, status: finalStatus }, event: ev }).catch(err =>
           console.error("⚠️ Reissued email send failed (non-blocking):", err)
         );
       }
 
-      res.json(enriched);
+      res.json(enrichedWithStatus);
     } catch (err) {
       console.error("Edit ticket error:", err);
       res.status(500).json({ error: "Failed to edit ticket" });
@@ -593,9 +633,23 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         issuedBy: issuer?.username || null,
       });
 
-      sendTicketEmail({ ticket, event, isCourtesy: true }).catch(err =>
-        console.error("⚠️ Courtesy email send failed (non-blocking):", err)
-      );
+      const dateNames = await storage.listEventDateNames();
+      const dateNameEntry = dateNames.find(dn => dn.eventDate === event.date);
+      const validation = validateTicketBeforeSend({
+        purchaserName,
+        eventDate: event.date,
+        locationStreet: dateNameEntry?.locationStreet ?? null,
+        eventLocation: event.location,
+      });
+
+      if (validation.valid) {
+        sendTicketEmail({ ticket, event, isCourtesy: true }).catch(err =>
+          console.error("⚠️ Courtesy email send failed (non-blocking):", err)
+        );
+      } else {
+        await storage.updateTicketStatus(ticket.id, "pending_review");
+        console.log(`⚠️ Courtesy ticket ${ticket.id} held for admin review — ${validation.reasons.join("; ")}`);
+      }
 
       res.json({ message: "Courtesy ticket created", ticket });
     } catch (err) {

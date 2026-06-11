@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { generateTicketQR } from "./qrcode";
 import { sendTicketEmail } from "./emailService";
 import { parseFuzzyEventDate } from "./dateUtils";
+import { validateTicketBeforeSend } from "./ticketValidation";
 import type { Event } from "@shared/schema";
 
 export class WebhookHandlers {
@@ -250,9 +251,24 @@ export class WebhookHandlers {
           console.log(`     URL: /ticket/${ticketUrl}`);
           console.log(`     QR Data: ${qrData}`);
 
-          sendTicketEmail({ ticket, event: dbEvent }).catch(err =>
-            console.error("  ⚠️ Email send failed (non-blocking):", err)
-          );
+          // Validate ticket fields before sending to customer
+          const allDateNames = await storage.listEventDateNames();
+          const dateNameEntry = allDateNames.find(dn => dn.eventDate === eventDate);
+          const validation = validateTicketBeforeSend({
+            purchaserName: customerName,
+            eventDate,
+            locationStreet: dateNameEntry?.locationStreet ?? null,
+            eventLocation: dbEvent.location,
+          });
+
+          if (validation.valid) {
+            sendTicketEmail({ ticket, event: dbEvent }).catch(err =>
+              console.error("  ⚠️ Email send failed (non-blocking):", err)
+            );
+          } else {
+            await storage.updateTicketStatus(ticket.id, "pending_review");
+            console.log(`  ⚠️ Ticket ${ticket.id} held for admin review — ${validation.reasons.join("; ")}`);
+          }
         }
       }
 
