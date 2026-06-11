@@ -198,9 +198,62 @@ async function backfillEventCalendarDates() {
   }
 }
 
+/**
+ * One-time migration: move the 4 old Members Event tickets (Apr–May 2026) out
+ * of the TBD-dated Members Event and into a new past-dated event so they are
+ * correctly archived.  Idempotent — checks current event_id before acting.
+ */
+async function migrateOldMembersTicketsToArchivedEvent() {
+  try {
+    const OLD_EVENT_ID = "fb8eb69c-07d0-456d-8092-993c932fbe37";
+    const TICKET_IDS = [
+      "d138dbcc-3410-452b-a3b9-d9a0deaf6be1", // Bianca Hernandez  – Apr 22
+      "77d8d47f-9e9b-4bf1-912e-a1675c98f233", // Mariah Kinney     – Apr 22
+      "5ac1110c-cfc2-4437-ae03-aa87c530a1bd", // Jessica Cofresi   – Apr 23
+      "6bacf7fa-ba39-4e26-8cf6-b7601f90bd82", // Victoria          – May 2 (courtesy)
+    ];
+
+    // Check how many tickets still need migrating
+    const pending: string[] = [];
+    for (const id of TICKET_IDS) {
+      const t = await storage.getTicket(id);
+      if (t && t.eventId === OLD_EVENT_ID) pending.push(id);
+    }
+    if (pending.length === 0) return; // already done
+
+    // Find or create the past archive event  (Apr 22nd, General, past calendar date)
+    const ARCHIVE_DATE = "Apr 22nd";
+    const ARCHIVE_TYPE = "General";
+    let archiveEvent = await storage.getEventByTypeAndDate(ARCHIVE_TYPE, ARCHIVE_DATE);
+    if (!archiveEvent) {
+      archiveEvent = await storage.createEvent({
+        name: "Members Event: Elevate Training + Revive Med Spa",
+        date: ARCHIVE_DATE,
+        time: null,
+        eventType: ARCHIVE_TYPE,
+        location: "San Diego, CA",
+        priceInCents: null,
+        stripeProductId: null,
+        active: true,
+        capacity: null,
+        calendarDate: new Date("2026-04-22"),
+      });
+      console.log(`📦 Created archive event: ${archiveEvent.id}`);
+    }
+
+    for (const id of pending) {
+      await storage.updateTicketEventId(id, archiveEvent.id);
+    }
+    console.log(`✅ Migrated ${pending.length} old Members ticket(s) → archived event ${archiveEvent.id}`);
+  } catch (err) {
+    console.error("⚠️ migrateOldMembersTickets failed (non-blocking):", err);
+  }
+}
+
 export async function registerRoutes(httpServer: Server, app: Express) {
   await seedAdminUser();
   backfillEventCalendarDates().catch(() => {});
+  migrateOldMembersTicketsToArchivedEvent().catch(() => {});
 
   app.post("/api/auth/login", (req, res, next) => {
     passport.authenticate("local", (err: any, user: any, info: any) => {
