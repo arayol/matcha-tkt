@@ -157,6 +157,13 @@ async function seedAdminUser() {
 async function backfillEventCalendarDates() {
   try {
     const allEvents = await storage.listEvents();
+
+    // Clear calendarDate for TBD/blank events that have a stale calendar date set
+    for (const ev of allEvents.filter(e => (e.date === "TBD" || e.date === "") && e.calendarDate)) {
+      await storage.updateEvent(ev.id, { calendarDate: null });
+      console.log(`📅 Cleared stale calendarDate for TBD event: ${ev.name}`);
+    }
+
     const eventsWithoutDate = allEvents.filter(e => !e.calendarDate && e.date !== "TBD" && e.date !== "");
     if (eventsWithoutDate.length === 0) return;
 
@@ -1323,15 +1330,19 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   app.patch("/api/admin/events/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, date, time, location, eventType, capacity, calendarDate } = req.body;
+      const { name, date, time, location, eventType, capacity } = req.body;
       const updateData: Record<string, any> = {};
       if (name !== undefined) updateData.name = name;
-      if (date !== undefined) updateData.date = date;
+      if (date !== undefined) {
+        updateData.date = date;
+        updateData.calendarDate = (date && date !== "TBD" && date !== "")
+          ? (parseFuzzyEventDate(date) || null)
+          : null;
+      }
       if (time !== undefined) updateData.time = time;
       if (location !== undefined) updateData.location = location;
       if (eventType !== undefined) updateData.eventType = eventType;
       if (capacity !== undefined) updateData.capacity = capacity !== "" && capacity !== null ? parseInt(capacity) : null;
-      if (calendarDate !== undefined) updateData.calendarDate = calendarDate ? new Date(calendarDate) : null;
       const updated = await storage.updateEvent(id, updateData);
       if (!updated) return res.status(404).json({ error: "Event not found" });
       // When the event type changes, propagate it to all tickets of this event
@@ -1552,7 +1563,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/admin/events", requireAdmin, async (req, res) => {
     try {
-      const { name, date, time, eventType, location, capacity, calendarDate } = req.body;
+      const { name, date, time, eventType, location, capacity } = req.body;
       if (!name || !date || !eventType) {
         return res.status(400).json({ error: "name, date, and eventType are required" });
       }
@@ -1570,7 +1581,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         priceInCents: null,
         stripeProductId: null,
         active: true,
-        calendarDate: calendarDate ? new Date(calendarDate) : null,
+        calendarDate: (date && date !== "TBD" && date !== "") ? (parseFuzzyEventDate(date) || null) : null,
       });
       res.json(event);
     } catch (err: any) {

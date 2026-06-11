@@ -93,7 +93,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [showTicketDialog, setShowTicketDialog] = useState(false);
   const [showEditEventDialog, setShowEditEventDialog] = useState(false);
   const [editEventTarget, setEditEventTarget] = useState<any>(null);
-  const [editEventForm, setEditEventForm] = useState({ name: "", date: "", time: "", eventType: "", calendarDate: "", location: "", capacity: "", locationStreet: "", locationCity: "", locationZip: "" });
+  const [editEventForm, setEditEventForm] = useState({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", locationStreet: "", locationCity: "", locationZip: "" });
   const [ticketDialogIds, setTicketDialogIds] = useState<string[]>([]);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
@@ -101,7 +101,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [confirmDeleteEventId, setConfirmDeleteEventId] = useState<string | null>(null);
   const [showFixTimesDialog, setShowFixTimesDialog] = useState(false);
   const [showAddEventDialog, setShowAddEventDialog] = useState(false);
-  const [addEventForm, setAddEventForm] = useState({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", calendarDate: "", locationStreet: "", locationCity: "", locationZip: "" });
+  const [addEventForm, setAddEventForm] = useState({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", locationStreet: "", locationCity: "", locationZip: "" });
   const [eventsCollapsed, setEventsCollapsed] = useState(true);
 
   const [showSplitDialog, setShowSplitDialog] = useState(false);
@@ -201,10 +201,10 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   });
 
   const createEventMutation = useMutation({
-    mutationFn: async (body: { name: string; date: string; time: string; eventType: string; location: string; capacity: string; calendarDate: string; locationStreet: string; locationCity: string; locationZip: string }) => {
+    mutationFn: async (body: { name: string; date: string; time: string; eventType: string; location: string; capacity: string; locationStreet: string; locationCity: string; locationZip: string }) => {
       await apiRequest("POST", "/api/admin/events", {
         name: body.name, date: body.date, time: body.time, eventType: body.eventType,
-        location: body.location, capacity: body.capacity, calendarDate: body.calendarDate,
+        location: body.location, capacity: body.capacity,
       });
       if (body.locationStreet || body.locationCity || body.locationZip) {
         await apiRequest("POST", "/api/admin/event-date-names", {
@@ -220,7 +220,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
       setShowAddEventDialog(false);
-      setAddEventForm({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", calendarDate: "", locationStreet: "", locationCity: "", locationZip: "" });
+      setAddEventForm({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", locationStreet: "", locationCity: "", locationZip: "" });
       toast({ title: "Event created" });
     },
     onError: (err: any) => toast({ title: "Failed to create event", description: err?.message, variant: "destructive" }),
@@ -656,13 +656,11 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                                     title="Edit event"
                                     onClick={() => {
                                       setEditEventTarget(ev);
-                                      const calDate = ev.calendarDate ? new Date(ev.calendarDate).toISOString().split("T")[0] : "";
                                       setEditEventForm({
                                         name: ev.name || "",
                                         date: ev.date || "",
                                         time: ev.time || "",
                                         eventType: ev.eventType || "",
-                                        calendarDate: calDate,
                                         location: ev.location || "",
                                         capacity: ev.capacity != null ? String(ev.capacity) : "",
                                         locationStreet: edn?.locationStreet || "",
@@ -1044,10 +1042,6 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Calendar Date</label>
-                <Input type="date" value={editEventForm.calendarDate} onChange={e => setEditEventForm(f => ({ ...f, calendarDate: e.target.value }))} data-testid="input-edit-event-calendar-date" />
-              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -1082,7 +1076,6 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                     date: editEventForm.date,
                     time: editEventForm.time,
                     eventType: editEventForm.eventType,
-                    calendarDate: editEventForm.calendarDate || null,
                     location: editEventForm.location,
                     capacity: editEventForm.capacity,
                   },
@@ -1135,10 +1128,6 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Event Type</label>
                 <Input placeholder="e.g. GA Ticket Access" value={addEventForm.eventType} onChange={e => setAddEventForm(f => ({ ...f, eventType: e.target.value }))} data-testid="input-add-event-type" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Calendar Date</label>
-                <Input type="date" value={addEventForm.calendarDate} onChange={e => setAddEventForm(f => ({ ...f, calendarDate: e.target.value }))} data-testid="input-add-event-calendar-date" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
