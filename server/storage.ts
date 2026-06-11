@@ -1,4 +1,4 @@
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { eq, and, inArray, desc, gte, lte, isNotNull } from "drizzle-orm";
 import { db } from "./db";
 import bcrypt from "bcryptjs";
 import {
@@ -26,6 +26,7 @@ export interface IStorage {
   getEventByStripeProductId(stripeProductId: string): Promise<Event | undefined>;
   getEventByDate(date: string): Promise<Event | undefined>;
   getEventByTypeAndDate(eventType: string, date: string): Promise<Event | undefined>;
+  findEventByCalendarProximity(date: Date, windowDays?: number): Promise<Event[]>;
   updateEvent(id: string, data: Partial<InsertEvent>): Promise<Event | undefined>;
   listEvents(): Promise<Event[]>;
 
@@ -133,6 +134,22 @@ export class DatabaseStorage implements IStorage {
       and(eq(events.eventType, eventType), eq(events.date, date))
     );
     return event;
+  }
+
+  async findEventByCalendarProximity(date: Date, windowDays = 3): Promise<Event[]> {
+    const start = new Date(date);
+    start.setDate(start.getDate() - windowDays);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setDate(end.getDate() + windowDays);
+    end.setHours(23, 59, 59, 999);
+    return db.select().from(events).where(
+      and(
+        isNotNull(events.calendarDate),
+        gte(events.calendarDate, start),
+        lte(events.calendarDate, end)
+      )
+    );
   }
 
   async updateEvent(id: string, data: Partial<InsertEvent>): Promise<Event | undefined> {
