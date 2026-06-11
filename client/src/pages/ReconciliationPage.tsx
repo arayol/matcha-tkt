@@ -571,28 +571,28 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                         <button
                           onClick={() => { setEventsCollapsed(false); setEventsTab("upcoming"); }}
                           className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                            eventsTab === "upcoming" && !eventsCollapsed
+                            eventsTab === "upcoming"
                               ? "bg-primary text-primary-foreground"
                               : "bg-muted/50 text-muted-foreground hover:bg-muted"
                           }`}
                           data-testid="tab-events-upcoming"
                         >
                           Upcoming
-                          <span className={`text-[10px] px-1 py-0.5 rounded ${eventsTab === "upcoming" && !eventsCollapsed ? "bg-white/20" : "bg-muted"}`}>
+                          <span className={`text-[10px] px-1 py-0.5 rounded ${eventsTab === "upcoming" ? "bg-white/20" : "bg-muted"}`}>
                             {upcomingEvents.length}
                           </span>
                         </button>
                         <button
                           onClick={() => { setEventsCollapsed(false); setEventsTab("archived"); }}
                           className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                            eventsTab === "archived" && !eventsCollapsed
+                            eventsTab === "archived"
                               ? "bg-muted-foreground/80 text-background"
                               : "bg-muted/50 text-muted-foreground hover:bg-muted"
                           }`}
                           data-testid="tab-events-archived"
                         >
                           Archived
-                          <span className={`text-[10px] px-1 py-0.5 rounded ${eventsTab === "archived" && !eventsCollapsed ? "bg-white/20" : "bg-muted"}`}>
+                          <span className={`text-[10px] px-1 py-0.5 rounded ${eventsTab === "archived" ? "bg-white/20" : "bg-muted"}`}>
                             {archivedEvents.length}
                           </span>
                         </button>
