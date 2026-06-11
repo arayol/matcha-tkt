@@ -61,9 +61,7 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
   const [editEventId, setEditEventId] = useState("");
 
   const { data: ticketList } = useQuery<TicketData[]>({ queryKey: ["/api/tickets"] });
-  const { data: eventList } = useQuery<EventData[]>({ queryKey: ["/api/events"], queryFn: () =>
-    apiRequest("GET", "/api/events?includeArchived=true").then(r => r.json())
-  });
+  const { data: eventList } = useQuery<EventData[]>({ queryKey: ["/api/events"] });
 
   function openEditModal(ticket: TicketData) {
     setEditingTicket(ticket);

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   GitCompareArrows, AlertTriangle, CheckCircle2, XCircle,
@@ -103,6 +103,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [showAddEventDialog, setShowAddEventDialog] = useState(false);
   const [addEventForm, setAddEventForm] = useState({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", locationStreet: "", locationCity: "", locationZip: "" });
   const [eventsCollapsed, setEventsCollapsed] = useState(true);
+  const [eventsTab, setEventsTab] = useState<"upcoming" | "archived">("upcoming");
 
   const [showSplitDialog, setShowSplitDialog] = useState(false);
   const [splitSourceEventId, setSplitSourceEventId] = useState<string | null>(null);
@@ -128,13 +129,19 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   });
 
   const { data: eventsData } = useQuery<any[]>({
-    queryKey: ["/api/events"],
+    queryKey: ["/api/events?includeArchived=true"],
+    queryFn: () => apiRequest("GET", "/api/events?includeArchived=true").then(r => r.json()),
   });
 
   const { data: splitTicketsData } = useQuery<{ id: string; billingName: string; email: string; ticketType: string; ticketTime: string | null }[]>({
     queryKey: ["/api/admin/events", splitSourceEventId, "tickets"],
     enabled: !!splitSourceEventId && showSplitDialog,
   });
+
+  const eventsToday = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
+  const upcomingEvents = useMemo(() => (eventsData || []).filter((ev: any) => !ev.calendarDate || new Date(ev.calendarDate) >= eventsToday), [eventsData, eventsToday]);
+  const archivedEvents = useMemo(() => (eventsData || []).filter((ev: any) => ev.calendarDate && new Date(ev.calendarDate) < eventsToday), [eventsData, eventsToday]);
+  const displayedEvents = eventsTab === "upcoming" ? upcomingEvents : archivedEvents;
 
   const applyMutation = useMutation({
     mutationFn: (body: { action: string; ids: string[] }) =>
@@ -549,13 +556,48 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
 
             {eventsData && (
               <Card data-testid="card-events">
-                <CardHeader className="pb-3 cursor-pointer" onClick={() => setEventsCollapsed(v => !v)}>
+                <CardHeader className="pb-3">
                   <div className="flex items-center justify-between w-full">
-                    <CardTitle className="text-base font-medium flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
-                      Events
-                      <Badge variant="secondary" className="ml-1">{eventsData?.length || 0}</Badge>
-                    </CardTitle>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <CardTitle
+                        className="text-base font-medium flex items-center gap-2 cursor-pointer select-none"
+                        onClick={() => setEventsCollapsed(v => !v)}
+                      >
+                        <Calendar className="h-4 w-4" />
+                        Events
+                      </CardTitle>
+                      {/* Tab switcher */}
+                      <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => { setEventsCollapsed(false); setEventsTab("upcoming"); }}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                            eventsTab === "upcoming" && !eventsCollapsed
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                          }`}
+                          data-testid="tab-events-upcoming"
+                        >
+                          Upcoming
+                          <span className={`text-[10px] px-1 py-0.5 rounded ${eventsTab === "upcoming" && !eventsCollapsed ? "bg-white/20" : "bg-muted"}`}>
+                            {upcomingEvents.length}
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => { setEventsCollapsed(false); setEventsTab("archived"); }}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                            eventsTab === "archived" && !eventsCollapsed
+                              ? "bg-muted-foreground/80 text-background"
+                              : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                          }`}
+                          data-testid="tab-events-archived"
+                        >
+                          Archived
+                          <span className={`text-[10px] px-1 py-0.5 rounded ${eventsTab === "archived" && !eventsCollapsed ? "bg-white/20" : "bg-muted"}`}>
+                            {archivedEvents.length}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                         <Button
@@ -606,7 +648,14 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {eventsData.map((ev: any) => {
+                      {displayedEvents.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="p-6 text-center text-sm text-muted-foreground">
+                            {eventsTab === "upcoming" ? "No upcoming events." : "No archived events."}
+                          </td>
+                        </tr>
+                      )}
+                      {displayedEvents.map((ev: any) => {
                         const edn = eventDateNames?.find((e: any) => e.eventDate === ev.date);
                         const locationDisplay = edn ? [edn.locationStreet, edn.locationCity, edn.locationZip].filter(Boolean).join(", ") : null;
                         return (
