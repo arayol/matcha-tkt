@@ -296,6 +296,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const summary = data?.summary;
 
   const filtered = divergences.filter((d) => {
+    if (filterType === "all" && d.type === "missing_in_stripe" && d.source === "csv") return false;
     if (filterType !== "all" && d.type !== filterType) return false;
     if (filterOrderType !== "all" && d.orderType !== filterOrderType) return false;
     return true;
