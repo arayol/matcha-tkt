@@ -1845,15 +1845,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   app.post("/api/admin/email-campaigns/draft", requireAdmin, campaignUpload.array("attachment", 10), async (req, res) => {
     try {
       const { id, subject, body, senderName, replyTo, contacts, useTemplate } = req.body as Record<string, string>;
-      if (!subject?.trim() && !body?.trim()) {
-        return res.status(400).json({ error: "At least subject or body is required to save a draft" });
-      }
       let parsed: { name: string; email: string }[] = [];
       if (contacts) {
         try { const raw = JSON.parse(contacts); parsed = campaignContactsSchema.parse(raw); } catch { parsed = []; }
       }
       const user = req.user as any;
       const files = (req.files || []) as Express.Multer.File[];
+      if (!subject?.trim() && !body?.trim() && parsed.length === 0 && files.length === 0) {
+        return res.status(400).json({ error: "Add a subject, body, contacts, or an attachment before saving a draft" });
+      }
       const filenamesJson = files.length > 0 ? JSON.stringify(files.map(f => f.originalname)) : null;
       const totalSize = files.length > 0 ? files.reduce((s, f) => s + f.size, 0) : null;
       let campaign;

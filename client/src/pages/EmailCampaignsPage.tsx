@@ -904,7 +904,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
             <Button
               variant="outline"
               onClick={() => saveDraftMutation.mutate()}
-              disabled={saveDraftMutation.isPending || (!subject.trim() && !body.trim())}
+              disabled={saveDraftMutation.isPending || (!subject.trim() && !body.trim() && validContacts.length === 0 && pdfFiles.length === 0)}
               data-testid="button-save-draft"
             >
               {saveDraftMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
