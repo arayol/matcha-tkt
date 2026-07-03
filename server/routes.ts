@@ -310,6 +310,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const filtered = includeArchived ? eventList : eventList.filter(e => {
+        if (e.active === false) return false; // manually archived
         const calDate = resolveEventCalendarDate(e, dateNameMap, earliestPurchaseByEvent.get(e.id));
         if (!calDate) return true; // unknown date → always show
         return calDate >= today;
@@ -1452,8 +1453,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   app.patch("/api/admin/events/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, date, time, location, eventType, capacity } = req.body;
+      const { name, date, time, location, eventType, capacity, active } = req.body;
       const updateData: Record<string, any> = {};
+      if (active !== undefined) updateData.active = active;
       if (name !== undefined) updateData.name = name;
       if (date !== undefined) {
         updateData.date = date;

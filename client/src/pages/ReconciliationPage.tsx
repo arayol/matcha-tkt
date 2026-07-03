@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   GitCompareArrows, AlertTriangle, CheckCircle2, XCircle,
   Download, Filter, Edit2, Check, X, Loader2, Calendar, Plus, Trash2, Send, MailCheck,
-  Upload, FileUp, FileSpreadsheet, RotateCcw, Scissors, Clock, ChevronDown,
+  Upload, FileUp, FileSpreadsheet, RotateCcw, Scissors, Clock, ChevronDown, Archive, ArchiveRestore,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -139,9 +139,22 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   });
 
   const eventsToday = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
-  const upcomingEvents = useMemo(() => (eventsData || []).filter((ev: any) => !ev.calendarDate || new Date(ev.calendarDate) >= eventsToday), [eventsData, eventsToday]);
-  const archivedEvents = useMemo(() => (eventsData || []).filter((ev: any) => ev.calendarDate && new Date(ev.calendarDate) < eventsToday), [eventsData, eventsToday]);
+  const isEventArchived = (ev: any) => ev.active === false || (ev.calendarDate && new Date(ev.calendarDate) < eventsToday);
+  const upcomingEvents = useMemo(() => (eventsData || []).filter((ev: any) => !isEventArchived(ev)), [eventsData, eventsToday]);
+  const archivedEvents = useMemo(() => (eventsData || []).filter((ev: any) => isEventArchived(ev)), [eventsData, eventsToday]);
   const displayedEvents = eventsTab === "upcoming" ? upcomingEvents : archivedEvents;
+
+  const archiveEventMutation = useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      apiRequest("PATCH", `/api/admin/events/${id}`, { active }),
+    onSuccess: async (_res, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/events?includeArchived=true"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/events/comparison"] });
+      toast({ title: variables.active ? "Event unarchived" : "Event archived" });
+    },
+    onError: () => toast({ title: "Failed to update event", variant: "destructive" }),
+  });
 
   const applyMutation = useMutation({
     mutationFn: (body: { action: string; ids: string[] }) =>
@@ -760,6 +773,18 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                                       <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                                     </Button>
                                   )}
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    title={isEventArchived(ev) ? "Unarchive event" : "Archive event"}
+                                    onClick={() => archiveEventMutation.mutate({ id: ev.id, active: isEventArchived(ev) ? true : false })}
+                                    disabled={archiveEventMutation.isPending}
+                                    data-testid={`button-archive-event-${ev.id}`}
+                                  >
+                                    {isEventArchived(ev)
+                                      ? <ArchiveRestore className="h-3.5 w-3.5 text-muted-foreground" />
+                                      : <Archive className="h-3.5 w-3.5 text-muted-foreground" />}
+                                  </Button>
                                 </div>
                               </td>
                             </>
