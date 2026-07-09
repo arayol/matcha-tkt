@@ -386,6 +386,21 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  app.post("/api/admin/tickets/:id/uncancel", requireAdmin, async (req, res) => {
+    try {
+      const ticket = await storage.getTicket(req.params.id);
+      if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+      if (ticket.status !== "cancelled") {
+        return res.status(400).json({ error: "Only cancelled tickets can be restored" });
+      }
+      const updated = await storage.updateTicketStatus(ticket.id, "valid");
+      res.json(updated);
+    } catch (err) {
+      console.error("Uncancel ticket error:", err);
+      res.status(500).json({ error: "Failed to restore ticket" });
+    }
+  });
+
   app.post("/api/admin/tickets/:id/reactivate", requireAdmin, async (req, res) => {
     try {
       const ticket = await storage.getTicket(req.params.id);

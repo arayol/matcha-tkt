@@ -52,6 +52,7 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
 
   const [reactivatingIds, setReactivatingIds] = useState<Set<string>>(new Set());
   const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
+  const [uncancellingIds, setUncancellingIds] = useState<Set<string>>(new Set());
   const [archivingIds, setArchivingIds] = useState<Set<string>>(new Set());
   const [confirmCancelTicket, setConfirmCancelTicket] = useState<TicketData | null>(null);
 
@@ -137,6 +138,23 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
     onError: (_err, ticketId) => {
       setCancellingIds(prev => { const s = new Set(prev); s.delete(ticketId); return s; });
       toast({ title: "Failed to cancel", description: "Could not cancel the ticket.", variant: "destructive" });
+    },
+  });
+
+  const uncancelMutation = useMutation({
+    mutationFn: async (ticketId: string) => {
+      setUncancellingIds(prev => new Set(prev).add(ticketId));
+      const res = await apiRequest("POST", `/api/admin/tickets/${ticketId}/uncancel`);
+      return res.json();
+    },
+    onSuccess: (_data, ticketId) => {
+      setUncancellingIds(prev => { const s = new Set(prev); s.delete(ticketId); return s; });
+      queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
+      toast({ title: "Ticket restored", description: "The ticket is valid again." });
+    },
+    onError: (_err, ticketId) => {
+      setUncancellingIds(prev => { const s = new Set(prev); s.delete(ticketId); return s; });
+      toast({ title: "Failed to restore", description: "Could not restore the ticket.", variant: "destructive" });
     },
   });
 
@@ -385,6 +403,19 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                           data-testid={`button-reactivate-${ticket.id}`}
                         >
                           {reactivatingIds.has(ticket.id)
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <RotateCcw className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
+                      {ticket.status === "cancelled" && (
+                        <button
+                          onClick={() => uncancelMutation.mutate(ticket.id)}
+                          disabled={uncancellingIds.has(ticket.id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Restore ticket (make valid again)"
+                          data-testid={`button-uncancel-${ticket.id}`}
+                        >
+                          {uncancellingIds.has(ticket.id)
                             ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             : <RotateCcw className="h-3.5 w-3.5" />}
                         </button>
