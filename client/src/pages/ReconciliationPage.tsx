@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   GitCompareArrows, AlertTriangle, CheckCircle2, XCircle,
@@ -89,6 +89,8 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filterType, setFilterType] = useState<string>("all");
   const [filterOrderType, setFilterOrderType] = useState<string>("all");
+  const [ticketsTableCollapsed, setTicketsTableCollapsed] = useState(true);
+  const [ticketsVisibleCount, setTicketsVisibleCount] = useState(30);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ billingName: "", email: "", price: "", parsedTicketType: "" });
   const [showTicketDialog, setShowTicketDialog] = useState(false);
@@ -103,7 +105,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [showFixTimesDialog, setShowFixTimesDialog] = useState(false);
   const [showAddEventDialog, setShowAddEventDialog] = useState(false);
   const [addEventForm, setAddEventForm] = useState({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", locationStreet: "", locationCity: "", locationZip: "", observations: "" });
-  const [eventsCollapsed, setEventsCollapsed] = useState(true);
+  const [eventsCollapsed, setEventsCollapsed] = useState(false);
   const [eventsTab, setEventsTab] = useState<"upcoming" | "archived">("upcoming");
 
   const [showSplitDialog, setShowSplitDialog] = useState(false);
@@ -316,6 +318,12 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
     if (filterOrderType !== "all" && d.orderType !== filterOrderType) return false;
     return true;
   });
+
+  const visibleTickets = filtered.slice(0, ticketsVisibleCount);
+
+  useEffect(() => {
+    setTicketsVisibleCount(30);
+  }, [filterType, filterOrderType]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -839,7 +847,18 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
               </div>
             )}
 
-            <Card className="overflow-visible">
+            <Card className="overflow-visible" data-testid="card-ticket-management">
+              <CardHeader className="pb-3 cursor-pointer select-none" onClick={() => setTicketsTableCollapsed(v => !v)}>
+                <div className="flex items-center justify-between w-full">
+                  <CardTitle className="text-base font-medium flex items-center gap-2">
+                    <GitCompareArrows className="h-4 w-4" />
+                    Ticket Management
+                    <Badge variant="secondary" className="ml-1" data-testid="text-ticket-management-count">{filtered.length}</Badge>
+                  </CardTitle>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${ticketsTableCollapsed ? "" : "rotate-180"}`} data-testid="button-toggle-ticket-management" />
+                </div>
+              </CardHeader>
+              {!ticketsTableCollapsed && (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -872,7 +891,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                         </td>
                       </tr>
                     ) : (
-                      filtered.map((d) => (
+                      visibleTickets.map((d) => (
                         <tr key={d.id} className="border-b last:border-b-0" data-testid={`row-divergence-${d.id}`}>
                           <td className="p-3">
                             <Checkbox
@@ -983,7 +1002,20 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                     )}
                   </tbody>
                 </table>
+                {filtered.length > ticketsVisibleCount && (
+                  <div className="flex justify-center p-4 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTicketsVisibleCount((c) => c + 30)}
+                      data-testid="button-load-more-tickets"
+                    >
+                      Load more ({filtered.length - ticketsVisibleCount} remaining)
+                    </Button>
+                  </div>
+                )}
               </div>
+              )}
             </Card>
 
             <div className="md:hidden pb-4 space-y-2">
