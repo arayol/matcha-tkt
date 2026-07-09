@@ -158,7 +158,7 @@ function buildTicketEmailHtml(params: {
     ? `${params.locationStreet}, ${params.locationCity}${params.locationZip ? ` ${params.locationZip}` : ""}`
     : "";
   const observationsHtml = params.observations && params.observations.trim()
-    ? `<div style="text-align:center;font-family:'Jost',sans-serif;font-size:14px;font-weight:400;color:#2a2520;margin:16px auto 0;max-width:480px;white-space:pre-line;">${params.observations.trim().replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>`
+    ? `<div class="observations-box">${params.observations.trim().replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>`
     : "";
 
   return `<!DOCTYPE html>
@@ -382,6 +382,21 @@ function buildTicketEmailHtml(params: {
       line-height: 1.2;
     }
 
+    .observations-box {
+      margin: 0 6% 4%;
+      padding: 3% 5%;
+      background: rgba(148,167,121,0.12);
+      border-top: 1px solid rgba(148,167,121,0.4);
+      border-bottom: 1px solid rgba(148,167,121,0.4);
+      text-align: center;
+      font-family: 'Jost', sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      color: #e8e4da;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+
     .ticket-footer {
       background: rgba(0,0,0,0.2);
       padding: 3% 6%;
@@ -563,6 +578,7 @@ function buildTicketEmailHtml(params: {
               <div class="detail-value">${emailCity}</div>
             </div>
           </div>
+          ${observationsHtml}
 
           <div class="ticket-footer">
             <div class="ticket-footer-inner">
@@ -573,7 +589,6 @@ function buildTicketEmailHtml(params: {
             </div>
           </div>
         </div>
-        ${observationsHtml}
 
         <!-- INSTRUCTIONS -->
         <div class="instructions">
