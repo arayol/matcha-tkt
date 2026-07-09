@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -93,7 +94,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [showTicketDialog, setShowTicketDialog] = useState(false);
   const [showEditEventDialog, setShowEditEventDialog] = useState(false);
   const [editEventTarget, setEditEventTarget] = useState<any>(null);
-  const [editEventForm, setEditEventForm] = useState({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", locationStreet: "", locationCity: "", locationZip: "" });
+  const [editEventForm, setEditEventForm] = useState({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", locationStreet: "", locationCity: "", locationZip: "", observations: "" });
   const [ticketDialogIds, setTicketDialogIds] = useState<string[]>([]);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
@@ -101,7 +102,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   const [confirmDeleteEventId, setConfirmDeleteEventId] = useState<string | null>(null);
   const [showFixTimesDialog, setShowFixTimesDialog] = useState(false);
   const [showAddEventDialog, setShowAddEventDialog] = useState(false);
-  const [addEventForm, setAddEventForm] = useState({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", locationStreet: "", locationCity: "", locationZip: "" });
+  const [addEventForm, setAddEventForm] = useState({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", locationStreet: "", locationCity: "", locationZip: "", observations: "" });
   const [eventsCollapsed, setEventsCollapsed] = useState(true);
   const [eventsTab, setEventsTab] = useState<"upcoming" | "archived">("upcoming");
 
@@ -182,7 +183,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   });
 
   const saveEditEventMutation = useMutation({
-    mutationFn: async ({ id, eventData, ednData }: { id: string; eventData: Record<string, any>; ednData: { eventDate: string; eventName: string; locationStreet?: string; locationCity?: string; locationZip?: string } }) => {
+    mutationFn: async ({ id, eventData, ednData }: { id: string; eventData: Record<string, any>; ednData: { eventDate: string; eventName: string; locationStreet?: string; locationCity?: string; locationZip?: string; observations?: string } }) => {
       await apiRequest("PATCH", `/api/admin/events/${id}`, eventData);
       await apiRequest("POST", "/api/admin/event-date-names", ednData);
     },
@@ -221,18 +222,19 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
   });
 
   const createEventMutation = useMutation({
-    mutationFn: async (body: { name: string; date: string; time: string; eventType: string; location: string; capacity: string; locationStreet: string; locationCity: string; locationZip: string }) => {
+    mutationFn: async (body: { name: string; date: string; time: string; eventType: string; location: string; capacity: string; locationStreet: string; locationCity: string; locationZip: string; observations: string }) => {
       await apiRequest("POST", "/api/admin/events", {
         name: body.name, date: body.date, time: body.time, eventType: body.eventType,
         location: body.location, capacity: body.capacity,
       });
-      if (body.locationStreet || body.locationCity || body.locationZip) {
+      if (body.locationStreet || body.locationCity || body.locationZip || body.observations) {
         await apiRequest("POST", "/api/admin/event-date-names", {
           eventDate: body.date,
           eventName: body.name,
           locationStreet: body.locationStreet || undefined,
           locationCity: body.locationCity || undefined,
           locationZip: body.locationZip || undefined,
+          observations: body.observations || undefined,
         });
       }
     },
@@ -240,7 +242,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
       await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/event-date-names"] });
       setShowAddEventDialog(false);
-      setAddEventForm({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", locationStreet: "", locationCity: "", locationZip: "" });
+      setAddEventForm({ name: "", date: "", time: "", eventType: "", location: "", capacity: "", locationStreet: "", locationCity: "", locationZip: "", observations: "" });
       toast({ title: "Event created" });
     },
     onError: (err: any) => toast({ title: "Failed to create event", description: err?.message, variant: "destructive" }),
@@ -729,6 +731,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                                         locationStreet: edn?.locationStreet || "",
                                         locationCity: edn?.locationCity || "",
                                         locationZip: edn?.locationZip || "",
+                                        observations: edn?.observations || "",
                                       });
                                       setShowEditEventDialog(true);
                                     }}
@@ -1138,6 +1141,16 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                 </div>
               </div>
             </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Additional Notes</label>
+              <Textarea
+                value={editEventForm.observations}
+                onChange={e => setEditEventForm(f => ({ ...f, observations: e.target.value }))}
+                placeholder="Ex: Dress Code: All Black Active Wear and White Socks"
+                data-testid="textarea-edit-event-observations"
+                rows={3}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => { setShowEditEventDialog(false); setEditEventTarget(null); }}>Cancel</Button>
@@ -1160,6 +1173,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                     locationStreet: editEventForm.locationStreet || undefined,
                     locationCity: editEventForm.locationCity || undefined,
                     locationZip: editEventForm.locationZip || undefined,
+                    observations: editEventForm.observations || undefined,
                   },
                 });
               }}
@@ -1224,6 +1238,16 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                   <Input placeholder="ZIP" value={addEventForm.locationZip} onChange={e => setAddEventForm(f => ({ ...f, locationZip: e.target.value }))} data-testid="input-add-event-zip" />
                 </div>
               </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Additional Notes</label>
+              <Textarea
+                value={addEventForm.observations}
+                onChange={e => setAddEventForm(f => ({ ...f, observations: e.target.value }))}
+                placeholder="Ex: Dress Code: All Black Active Wear and White Socks"
+                data-testid="textarea-add-event-observations"
+                rows={3}
+              />
             </div>
           </div>
           <DialogFooter>

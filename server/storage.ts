@@ -376,6 +376,7 @@ export class DatabaseStorage implements IStorage {
       if (data.locationStreet !== undefined) updateData.locationStreet = data.locationStreet;
       if (data.locationCity !== undefined) updateData.locationCity = data.locationCity;
       if (data.locationZip !== undefined) updateData.locationZip = data.locationZip;
+      if (data.observations !== undefined) updateData.observations = data.observations;
       const [updated] = await db.update(eventDateNames).set(updateData).where(eq(eventDateNames.eventDate, data.eventDate)).returning();
       return updated;
     }

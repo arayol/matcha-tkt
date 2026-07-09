@@ -144,6 +144,7 @@ function buildTicketEmailHtml(params: {
   locationStreet?: string | null;
   locationCity?: string | null;
   locationZip?: string | null;
+  observations?: string | null;
 }) {
   const baseUrl = process.env.APP_BASE_URL
     || (process.env.WEB_REPL_RENEWAL ? "https://matcha-rayol.replit.app" : null)
@@ -155,6 +156,9 @@ function buildTicketEmailHtml(params: {
   const emailCity = params.locationCity || "San Diego, CA";
   const emailAddressLine = params.locationStreet && params.locationCity
     ? `${params.locationStreet}, ${params.locationCity}${params.locationZip ? ` ${params.locationZip}` : ""}`
+    : "";
+  const observationsHtml = params.observations && params.observations.trim()
+    ? `<div style="text-align:center;font-family:'Jost',sans-serif;font-size:14px;font-weight:400;color:#2a2520;margin:16px auto 0;max-width:480px;white-space:pre-line;">${params.observations.trim().replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>`
     : "";
 
   return `<!DOCTYPE html>
@@ -569,6 +573,7 @@ function buildTicketEmailHtml(params: {
             </div>
           </div>
         </div>
+        ${observationsHtml}
 
         <!-- INSTRUCTIONS -->
         <div class="instructions">
@@ -630,6 +635,7 @@ export async function sendReissuedTicketEmail(params: {
     let locationStreet: string | null = null;
     let locationCity: string | null = null;
     let locationZip: string | null = null;
+    let observations: string | null = null;
     if (event?.date && event.date !== "TBD") {
       try {
         const { storage } = await import("./storage");
@@ -639,6 +645,7 @@ export async function sendReissuedTicketEmail(params: {
           locationStreet = mapping.locationStreet;
           locationCity = mapping.locationCity;
           locationZip = mapping.locationZip;
+          observations = mapping.observations;
         }
       } catch {}
     }
@@ -657,6 +664,7 @@ export async function sendReissuedTicketEmail(params: {
       isCourtesy: false,
       locationStreet,
       locationCity,
+      observations,
       locationZip,
     });
 
@@ -710,6 +718,7 @@ export async function sendTicketEmail(params: {
     let locationStreet: string | null = null;
     let locationCity: string | null = null;
     let locationZip: string | null = null;
+    let observations: string | null = null;
     if (event?.date && event.date !== "TBD") {
       try {
         const { storage } = await import("./storage");
@@ -719,6 +728,7 @@ export async function sendTicketEmail(params: {
           locationStreet = mapping.locationStreet;
           locationCity = mapping.locationCity;
           locationZip = mapping.locationZip;
+          observations = mapping.observations;
         }
       } catch {}
     }
@@ -738,6 +748,7 @@ export async function sendTicketEmail(params: {
       locationStreet,
       locationCity,
       locationZip,
+      observations,
     });
 
     const rawMessage = makeRfc2822({

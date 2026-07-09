@@ -1758,7 +1758,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/admin/event-date-names", requireAdmin, async (req, res) => {
     try {
-      const { eventDate, eventName, locationStreet, locationCity, locationZip } = req.body;
+      const { eventDate, eventName, locationStreet, locationCity, locationZip, observations } = req.body;
       if (!eventDate || !eventName) {
         return res.status(400).json({ error: "eventDate and eventName are required" });
       }
@@ -1768,6 +1768,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         locationStreet: locationStreet || null,
         locationCity: locationCity || null,
         locationZip: locationZip || null,
+        observations: observations || null,
       });
       // Auto-create the parent event record if it doesn't exist yet
       const existingEvent = await storage.getEventByDate(eventDate);
@@ -1792,12 +1793,13 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.patch("/api/admin/event-date-names/:id", requireAdmin, async (req, res) => {
     try {
-      const { eventName, locationStreet, locationCity, locationZip, archived } = req.body;
+      const { eventName, locationStreet, locationCity, locationZip, observations, archived } = req.body;
       const data: Record<string, any> = {};
       if (eventName !== undefined) data.eventName = eventName;
       if (locationStreet !== undefined) data.locationStreet = locationStreet || null;
       if (locationCity !== undefined) data.locationCity = locationCity || null;
       if (locationZip !== undefined) data.locationZip = locationZip || null;
+      if (observations !== undefined) data.observations = observations || null;
       if (archived !== undefined) data.archived = archived;
       const updated = await storage.updateEventDateName(req.params.id, data);
       if (!updated) return res.status(404).json({ error: "Not found" });
