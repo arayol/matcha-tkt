@@ -32,10 +32,13 @@ export async function generateTicketPDF(
 
     let y = 100;
 
-    doc.fontSize(14).fillColor(darkText).font("Helvetica-Bold")
-      .text(event?.name || "Event Ticket", 40, y, { width: pageWidth });
+    const eventNameText = event?.name || "Event Ticket";
+    const eventNameHeight = doc.fontSize(14).font("Helvetica-Bold")
+      .heightOfString(eventNameText, { width: pageWidth, align: "center" });
+    doc.fillColor(darkText)
+      .text(eventNameText, 40, y, { width: pageWidth, align: "center" });
 
-    y += 22;
+    y += eventNameHeight + 10;
 
     if (event) {
       const locationLine = locationData?.locationStreet && locationData?.locationCity
@@ -45,9 +48,11 @@ export async function generateTicketPDF(
       const dateLine = displayTime
         ? `${event.date}  ·  ${displayTime}  ·  ${locationLine}`
         : `${event.date}  ·  ${locationLine}`;
-      doc.fontSize(10).fillColor(mutedText).font("Helvetica")
-        .text(dateLine, 40, y, { width: pageWidth });
-      y += 16;
+      const dateLineHeight = doc.fontSize(10).font("Helvetica")
+        .heightOfString(dateLine, { width: pageWidth, align: "center" });
+      doc.fillColor(mutedText)
+        .text(dateLine, 40, y, { width: pageWidth, align: "center" });
+      y += dateLineHeight + 8;
     }
 
     y += 8;
