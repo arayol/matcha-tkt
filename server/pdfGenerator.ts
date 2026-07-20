@@ -44,10 +44,7 @@ export async function generateTicketPDF(
       const locationLine = locationData?.locationStreet && locationData?.locationCity
         ? `${locationData.locationStreet}, ${locationData.locationCity}${locationData.locationZip ? ` ${locationData.locationZip}` : ""}`
         : event.location || "San Diego, CA";
-      const displayTime = ticket.ticketTime || event.time;
-      const dateLine = displayTime
-        ? `${event.date}  ·  ${displayTime}  ·  ${locationLine}`
-        : `${event.date}  ·  ${locationLine}`;
+      const dateLine = locationLine;
       const dateLineHeight = doc.fontSize(10).font("Helvetica")
         .heightOfString(dateLine, { width: pageWidth, align: "center" });
       doc.fillColor(mutedText)
