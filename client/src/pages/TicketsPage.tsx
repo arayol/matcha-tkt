@@ -332,7 +332,7 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
               </div>
             ) : (
               <div className="divide-y divide-card-border">
-                {filtered.map((ticket) => {
+                {filtered.map((ticket, idx) => {
                   const isPending = ticket.status === "pending_review";
                   return (
                     <div
@@ -346,6 +346,7 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                       }`}
                       data-testid={`ticket-${ticket.id}`}
                     >
+                      <span className="text-[11px] text-muted-foreground/50 w-6 text-right flex-shrink-0 select-none">{idx + 1}</span>
                       <div className={`flex h-9 w-9 items-center justify-center rounded-xl flex-shrink-0 ${
                         isPending
                           ? "bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400"
