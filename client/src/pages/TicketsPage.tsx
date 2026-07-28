@@ -44,7 +44,7 @@ interface TicketsPageProps {
 }
 
 export default function TicketsPage({ dark, toggleTheme, onLogout, user }: TicketsPageProps) {
-  const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
+  const [activeFilter, setActiveFilter] = useState<FilterTab>("valid");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -230,8 +230,8 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
   }, [activeFilter, upcomingTickets, archivedTickets, search, dateFrom, dateTo]);
 
   const filterTabs: { key: FilterTab; label: string; count: number; icon?: typeof Archive; accent?: string }[] = [
-    { key: "all", label: "All", count: upcomingTickets.length },
     { key: "valid", label: "Valid", count: upcomingStats.valid },
+    { key: "all", label: "All", count: upcomingTickets.length },
     { key: "used", label: "Used", count: upcomingStats.used },
     { key: "courtesy", label: "Courtesy", count: upcomingStats.courtesy },
     { key: "cancelled", label: "Cancelled", count: upcomingStats.cancelled },
