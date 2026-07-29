@@ -40,6 +40,7 @@ export class WebhookHandlers {
     productName: string,
     eventType: string,
     eventDate: string,
+    eventTime?: string,
   ): Promise<{ event: Event; matchedBy: string } | null> {
     // 1. Stripe product ID
     const byProductId = await storage.getEventByStripeProductId(productId);
@@ -47,13 +48,21 @@ export class WebhookHandlers {
       return { event: byProductId, matchedBy: "stripe_product_id" };
     }
 
-    // 2. Exact (eventType, eventDate)
+    // 2. Exact (eventType, eventDate, time) — most precise before falling back to type+date only
+    if (eventTime && eventTime !== "TBD") {
+      const byTypeDateTime = await storage.getEventByTypeDateAndTime(eventType, eventDate, eventTime);
+      if (byTypeDateTime) {
+        return { event: byTypeDateTime, matchedBy: "type+date+time_exact" };
+      }
+    }
+
+    // 3. Exact (eventType, eventDate)
     const byTypeDate = await storage.getEventByTypeAndDate(eventType, eventDate);
     if (byTypeDate) {
       return { event: byTypeDate, matchedBy: "type+date_exact" };
     }
 
-    // 3 & 4. Calendar proximity — try parsed eventDate first, then keywords in the full product name
+    // 4 & 5. Calendar proximity — try parsed eventDate first, then keywords in the full product name
     const candidateDates: Array<{ date: Date; source: string }> = [];
 
     if (eventDate !== "TBD" && eventDate !== "") {
@@ -74,17 +83,41 @@ export class WebhookHandlers {
       const nearby = await storage.findEventByCalendarProximity(date, 3);
       if (nearby.length === 0) continue;
 
-      // Prefer an event whose eventType matches; otherwise take the closest by calendar date
+      // Priority 1: match both eventType AND time (handles same-day multi-class scenarios)
+      if (eventTime && eventTime !== "TBD") {
+        const typeAndTimeMatch = nearby.find(
+          e =>
+            (e.eventType || "").toLowerCase() === eventType.toLowerCase() &&
+            (e.time || "").toLowerCase() === eventTime.toLowerCase(),
+        );
+        if (typeAndTimeMatch) {
+          return { event: typeAndTimeMatch, matchedBy: `calendar_proximity(${source})+type+time` };
+        }
+      }
+
+      // Priority 2: match eventType only
       const typeMatch = nearby.find(
         e => (e.eventType || "").toLowerCase() === eventType.toLowerCase(),
       );
-      const best = typeMatch || nearby.sort((a, b) => {
+      if (typeMatch) {
+        return { event: typeMatch, matchedBy: `calendar_proximity(${source})+type` };
+      }
+
+      // Priority 3: closest by calendar date, with time as tiebreaker for same-day events
+      const sorted = [...nearby].sort((a, b) => {
         const da = Math.abs(new Date(a.calendarDate!).getTime() - date.getTime());
         const db2 = Math.abs(new Date(b.calendarDate!).getTime() - date.getTime());
-        return da - db2;
-      })[0];
+        if (da !== db2) return da - db2;
+        // Tiebreaker: prefer the event whose stored time matches eventTime
+        if (eventTime && eventTime !== "TBD") {
+          const aTimeMatch = (a.time || "").toLowerCase() === eventTime.toLowerCase() ? 0 : 1;
+          const bTimeMatch = (b.time || "").toLowerCase() === eventTime.toLowerCase() ? 0 : 1;
+          return aTimeMatch - bTimeMatch;
+        }
+        return 0;
+      });
 
-      return { event: best, matchedBy: `calendar_proximity(${source})` };
+      return { event: sorted[0], matchedBy: `calendar_proximity(${source})` };
     }
 
     return null;
@@ -153,7 +186,7 @@ export class WebhookHandlers {
         }
 
         // Resolve existing DB event via the priority fallback chain
-        const resolved = await WebhookHandlers.resolveEvent(product.id, product.name, eventType, eventDate);
+        const resolved = await WebhookHandlers.resolveEvent(product.id, product.name, eventType, eventDate, eventTime !== "TBD" ? eventTime : undefined);
 
         let dbEvent: Event;
 

@@ -2133,6 +2133,75 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  // One-time data repair: Fix Aug 16 Sculpt Class tickets mislinked to Mat Pilates event.
+  // Safe to call multiple times (idempotent). Remove after confirmed fixed.
+  app.post("/api/admin/repair-august16-tickets", requireAdmin, async (req, res) => {
+    try {
+      const SCULPT_CLASS_EVENT_ID = "559b28da-9bb4-4cc8-9b2f-cb09ce42b7fb";
+      const MAT_PILATES_9AM_EVENT_ID = "4ad58dd9-b1d9-47f2-a9ae-1d037656688f";
+      const WRONG_TICKET_IDS = [
+        "98660588-d7da-4164-930f-17a34b5ce13c", // Erin Sprague
+        "c23431cf-4da3-4173-bbfc-b02f03cd902f", // Erin McLaren (cancelled)
+        "dec55eb5-8a69-498a-93e0-ac711b658a95", // Dai Jhun Boyd
+      ];
+
+      const log: string[] = [];
+      log.push("=== Aug 16 Sculpt Class Ticket Repair ===");
+
+      // Verify sculpt class event exists
+      const sculptEvent = await storage.getEvent(SCULPT_CLASS_EVENT_ID);
+      if (!sculptEvent) {
+        return res.status(404).json({ error: "Sculpt Class event not found", id: SCULPT_CLASS_EVENT_ID });
+      }
+      log.push(`✅ Sculpt Class event: ${sculptEvent.name}`);
+
+      // Process each wrong ticket
+      const repaired: Array<{ ticketId: string; purchaserName: string; purchaserEmail: string; oldStatus: string; newStatus: string }> = [];
+      const skipped: Array<{ ticketId: string; reason: string }> = [];
+
+      for (const ticketId of WRONG_TICKET_IDS) {
+        const ticket = await storage.getTicket(ticketId);
+        if (!ticket) {
+          skipped.push({ ticketId, reason: "Ticket not found" });
+          log.push(`  ⚠️ Ticket ${ticketId} not found — skipping`);
+          continue;
+        }
+
+        if (ticket.eventId !== MAT_PILATES_9AM_EVENT_ID) {
+          skipped.push({ ticketId, reason: `Already on correct event (eventId=${ticket.eventId})` });
+          log.push(`  ℹ️ Ticket ${ticketId} (${ticket.purchaserName}) already on event ${ticket.eventId} — skipping`);
+          continue;
+        }
+
+        // Reassign to the correct Sculpt Class event and flag for admin review
+        const newStatus = "pending_review";
+        await storage.updateTicket(ticketId, { eventId: SCULPT_CLASS_EVENT_ID });
+        await storage.updateTicketStatus(ticketId, newStatus);
+
+        repaired.push({
+          ticketId,
+          purchaserName: ticket.purchaserName,
+          purchaserEmail: ticket.purchaserEmail,
+          oldStatus: ticket.status,
+          newStatus,
+        });
+        log.push(`  ✅ Ticket ${ticketId} (${ticket.purchaserName} <${ticket.purchaserEmail}>) reassigned to Sculpt Class + marked ${newStatus}`);
+        console.log(`[REPAIR] Ticket ${ticketId} reassigned: Mat Pilates → Sculpt Class | ${ticket.purchaserName} <${ticket.purchaserEmail}>`);
+      }
+
+      log.push("");
+      log.push(`Summary: ${repaired.length} tickets repaired, ${skipped.length} skipped`);
+      if (repaired.length > 0) {
+        log.push("ACTION REQUIRED: Resend corrected tickets to customers listed above.");
+      }
+
+      return res.json({ ok: true, log, repaired, skipped });
+    } catch (err: any) {
+      console.error("[REPAIR] Error:", err);
+      return res.status(500).json({ error: err?.message || "Repair failed" });
+    }
+  });
+
   app.delete("/api/admin/email-campaigns/:id", requireAdmin, async (req, res) => {
     try {
       const deleted = await storage.deleteEmailCampaign(req.params.id);

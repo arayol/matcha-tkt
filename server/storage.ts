@@ -26,6 +26,7 @@ export interface IStorage {
   getEventByStripeProductId(stripeProductId: string): Promise<Event | undefined>;
   getEventByDate(date: string): Promise<Event | undefined>;
   getEventByTypeAndDate(eventType: string, date: string): Promise<Event | undefined>;
+  getEventByTypeDateAndTime(eventType: string, date: string, time: string): Promise<Event | undefined>;
   findEventByCalendarProximity(date: Date, windowDays?: number): Promise<Event[]>;
   updateEvent(id: string, data: Partial<InsertEvent>): Promise<Event | undefined>;
   listEvents(): Promise<Event[]>;
@@ -132,6 +133,13 @@ export class DatabaseStorage implements IStorage {
   async getEventByTypeAndDate(eventType: string, date: string): Promise<Event | undefined> {
     const [event] = await db.select().from(events).where(
       and(eq(events.eventType, eventType), eq(events.date, date))
+    );
+    return event;
+  }
+
+  async getEventByTypeDateAndTime(eventType: string, date: string, time: string): Promise<Event | undefined> {
+    const [event] = await db.select().from(events).where(
+      and(eq(events.eventType, eventType), eq(events.date, date), eq(events.time, time))
     );
     return event;
   }
