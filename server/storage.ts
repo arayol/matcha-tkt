@@ -41,6 +41,7 @@ export interface IStorage {
   listTickets(): Promise<Ticket[]>;
   updateTicket(id: string, data: { purchaserName?: string; purchaserEmail?: string; eventId?: string }): Promise<Ticket | undefined>;
   updateTicketStatus(id: string, status: string, usedAt?: Date): Promise<Ticket | undefined>;
+  resetTicketToValid(id: string): Promise<Ticket | undefined>;
   updateTicketEventId(ticketId: string, eventId: string): Promise<Ticket | undefined>;
   validateTicketAtomically(id: string): Promise<Ticket | undefined>;
 
@@ -234,6 +235,14 @@ export class DatabaseStorage implements IStorage {
       updateData.usedAt = usedAt;
     }
     const [updated] = await db.update(tickets).set(updateData).where(eq(tickets.id, id)).returning();
+    return updated;
+  }
+
+  async resetTicketToValid(id: string): Promise<Ticket | undefined> {
+    const [updated] = await db.update(tickets)
+      .set({ status: "valid", usedAt: null })
+      .where(eq(tickets.id, id))
+      .returning();
     return updated;
   }
 
