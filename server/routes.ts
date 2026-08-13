@@ -550,10 +550,16 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         const eventDateNames = await storage.listEventDateNames();
         const mapping = eventDateNames.find(edn => edn.eventDate === event.date);
         if (mapping) {
-          displayName = mapping.eventName;
+          if (ticket.ticketType !== "General") {
+            displayName = mapping.eventName;
+          }
           locationStreet = mapping.locationStreet;
           locationCity = mapping.locationCity;
           locationZip = mapping.locationZip;
+        }
+        // General tickets always show date + GA Ticket regardless of mapping
+        if (ticket.ticketType === "General") {
+          displayName = `${event.date} · GA Ticket`;
         }
       }
 
@@ -689,10 +695,16 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         const eventDateNames = await storage.listEventDateNames();
         const mapping = eventDateNames.find(edn => edn.eventDate === event.date);
         if (mapping) {
-          resolvedEvent = { ...event, name: mapping.eventName };
+          if (ticket.ticketType !== "General") {
+            resolvedEvent = { ...event, name: mapping.eventName };
+          }
           locationStreet = mapping.locationStreet;
           locationCity = mapping.locationCity;
           locationZip = mapping.locationZip;
+        }
+        // General tickets always show date + GA Ticket regardless of mapping
+        if (ticket.ticketType === "General") {
+          resolvedEvent = { ...(resolvedEvent ?? event)!, name: `${event.date} · GA Ticket` };
         }
       }
 

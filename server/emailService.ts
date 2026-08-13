@@ -665,12 +665,17 @@ export async function sendReissuedTicketEmail(params: {
       } catch {}
     }
 
-    const pdfBuffer = await generateTicketPDF(ticket, event, { locationStreet, locationCity, locationZip });
+    const reissueEventName = ticket.ticketType === "General" && event?.date
+      ? `${event.date} · GA Ticket`
+      : event?.name || "Matcha On Ice Event";
+
+    const reissueEventForPdf = event ? { ...event, name: reissueEventName } : event;
+    const pdfBuffer = await generateTicketPDF(ticket, reissueEventForPdf, { locationStreet, locationCity, locationZip });
     const pdfFilename = `ticket-${ticket.ticketUrl}.pdf`;
 
     const baseHtml = buildTicketEmailHtml({
       name: ticket.purchaserName,
-      eventName: event?.name || "Matcha On Ice Event",
+      eventName: reissueEventName,
       eventDate: event?.date || "TBD",
       eventTime: event?.time || "TBD",
       eventLocation: event?.location || "San Diego, CA",
@@ -697,7 +702,7 @@ export async function sendReissuedTicketEmail(params: {
     const rawMessage = makeRfc2822({
       to: ticket.purchaserEmail,
       from: fromHeader,
-      subject: `[REISSUED] Your ticket for ${event?.name || "Matcha On Ice"} — updated`,
+      subject: `[REISSUED] Your ticket for ${reissueEventName} — updated`,
       htmlBody,
       pdfBuffer,
       pdfFilename,
@@ -748,12 +753,17 @@ export async function sendTicketEmail(params: {
       } catch {}
     }
 
-    const pdfBuffer = await generateTicketPDF(ticket, event, { locationStreet, locationCity, locationZip });
+    const confirmEventName = ticket.ticketType === "General" && event?.date
+      ? `${event.date} · GA Ticket`
+      : event?.name || "Matcha On Ice Event";
+
+    const confirmEventForPdf = event ? { ...event, name: confirmEventName } : event;
+    const pdfBuffer = await generateTicketPDF(ticket, confirmEventForPdf, { locationStreet, locationCity, locationZip });
     const pdfFilename = `ticket-${ticket.ticketUrl}.pdf`;
 
     const htmlBody = buildTicketEmailHtml({
       name: ticket.purchaserName,
-      eventName: event?.name || "Matcha On Ice Event",
+      eventName: confirmEventName,
       eventDate: event?.date || "TBD",
       eventTime: event?.time || "TBD",
       eventLocation: event?.location || "San Diego, CA",
@@ -769,7 +779,7 @@ export async function sendTicketEmail(params: {
     const rawMessage = makeRfc2822({
       to: ticket.purchaserEmail,
       from: fromHeader,
-      subject: `Your ticket for ${event?.name || "Matcha On Ice"} is confirmed!`,
+      subject: `Your ticket for ${confirmEventName} is confirmed!`,
       htmlBody,
       pdfBuffer,
       pdfFilename,
