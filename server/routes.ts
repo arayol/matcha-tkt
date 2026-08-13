@@ -550,9 +550,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         const eventDateNames = await storage.listEventDateNames();
         const mapping = eventDateNames.find(edn => edn.eventDate === event.date);
         if (mapping) {
-          if (ticket.ticketType !== "General") {
-            displayName = mapping.eventName;
-          }
           locationStreet = mapping.locationStreet;
           locationCity = mapping.locationCity;
           locationZip = mapping.locationZip;
@@ -695,9 +692,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         const eventDateNames = await storage.listEventDateNames();
         const mapping = eventDateNames.find(edn => edn.eventDate === event.date);
         if (mapping) {
-          if (ticket.ticketType !== "General") {
-            resolvedEvent = { ...event, name: mapping.eventName };
-          }
           locationStreet = mapping.locationStreet;
           locationCity = mapping.locationCity;
           locationZip = mapping.locationZip;
