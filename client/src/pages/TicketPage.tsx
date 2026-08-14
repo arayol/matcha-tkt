@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
-import { CheckCircle2, XCircle, Clock, MapPin, Calendar, Timer, User, Ticket, Download, Share2 } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, MapPin, Calendar, Timer, User, Ticket, Download, Share2, RotateCcw } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { apiRequest } from "@/lib/queryClient";
 
 const MATCHA_GREEN = "#94a779";
 
@@ -9,6 +11,17 @@ export default function TicketPage() {
   const params = useParams<{ slug: string }>();
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "adm";
+  const queryClient = useQueryClient();
+
+  const resetMutation = useMutation({
+    mutationFn: (ticketId: string) =>
+      apiRequest("POST", `/api/admin/tickets/${ticketId}/uncancel`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ticket", params.slug] });
+    },
+  });
 
   const { data, isLoading, error } = useQuery<{ ticket: any; event: any }>({
     queryKey: ["/api/ticket", params.slug],
@@ -104,11 +117,28 @@ export default function TicketPage() {
             )}
 
             {ticket.status === "used" && (
-              <div className="text-center py-4">
+              <div className="text-center py-4 space-y-3">
                 <Clock className="h-16 w-16 text-status-away mx-auto mb-2" />
                 <p className="text-muted-foreground text-sm">
                   Used on {ticket.usedAt ? new Date(ticket.usedAt).toLocaleString() : "unknown"}
                 </p>
+                {isAdmin && (
+                  <button
+                    onClick={() => {
+                      if (confirm("Reativar este ingresso para 'válido'?")) {
+                        resetMutation.mutate(ticket.id);
+                      }
+                    }}
+                    disabled={resetMutation.isPending}
+                    className="flex items-center justify-center gap-2 mx-auto px-4 py-2 rounded-xl text-sm font-medium border border-status-online text-status-online hover:bg-green-50 dark:hover:bg-green-950/30 active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    {resetMutation.isPending ? "Reativando..." : "Reativar ingresso"}
+                  </button>
+                )}
+                {resetMutation.isError && (
+                  <p className="text-xs text-destructive">Erro ao reativar. Tente novamente.</p>
+                )}
               </div>
             )}
 
