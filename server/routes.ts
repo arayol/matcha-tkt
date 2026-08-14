@@ -590,7 +590,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/tickets/validate-qr", requireAuth, async (req, res) => {
     try {
-      const { qrData } = req.body;
+      const { qrData, force } = req.body;
       if (!qrData) return res.status(400).json({ error: "qrData is required" });
 
       const ticket = await storage.getTicketByQrData(qrData);
@@ -602,6 +602,38 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       }
       if (ticket.status === "cancelled") {
         return res.status(400).json({ error: "Ticket is cancelled", ticket });
+      }
+
+      // Date mismatch warning: if event has a calendarDate and it's not today, warn before validating.
+      //
+      // Storage convention: calendarDate is a Drizzle `timestamp` column stored as midnight UTC on
+      // the intended calendar date (creation paths use `new Date("YYYY-MM-DD")` or equivalent, which
+      // parses as UTC midnight on a UTC server). We therefore read its date by extracting UTC
+      // components — NOT by reinterpreting the UTC instant through a local timezone, which would
+      // shift it one day back for UTC-offset timezones.
+      //
+      // "Today" is derived in America/Los_Angeles (the business/event timezone) so that scans work
+      // correctly across the full LA calendar day regardless of server timezone.
+      if (!force && ticket.eventId) {
+        const event = await storage.getEvent(ticket.eventId);
+        if (event?.calendarDate) {
+          // Today in the business timezone (en-CA locale produces YYYY-MM-DD).
+          const TZ = "America/Los_Angeles";
+          const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date());
+
+          // Event's intended calendar date: extract as UTC components since it is stored as midnight UTC.
+          const raw = event.calendarDate;
+          const asDate = raw instanceof Date ? raw : new Date(raw as string);
+          const eventDateStr = [
+            asDate.getUTCFullYear(),
+            String(asDate.getUTCMonth() + 1).padStart(2, "0"),
+            String(asDate.getUTCDate()).padStart(2, "0"),
+          ].join("-");
+
+          if (eventDateStr !== todayStr) {
+            return res.json({ warning: "date_mismatch", ticket, event });
+          }
+        }
       }
 
       const updated = await storage.validateTicketAtomically(ticket.id);

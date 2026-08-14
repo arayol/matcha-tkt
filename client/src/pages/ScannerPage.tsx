@@ -9,7 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import AppLayout from "@/components/AppLayout";
 
-type ScanState = "idle" | "scanning" | "loading" | "success" | "error_used" | "error_invalid" | "error_camera";
+type ScanState = "idle" | "scanning" | "loading" | "success" | "error_used" | "error_invalid" | "error_camera" | "warn_date";
 type TabId = "scanner" | "activity" | "guests";
 
 interface ValidationResult {
@@ -84,6 +84,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
   const [activeTab, setActiveTab] = useState<TabId>("scanner");
   const [guestSearch, setGuestSearch] = useState("");
   const [guestFilter, setGuestFilter] = useState<"all" | "pending" | "arrived">("all");
+  const [pendingQrData, setPendingQrData] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isScanningRef = useRef(false);
   const mountedRef = useRef(true);
@@ -151,11 +152,20 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
     }
   }, [stopScanner]);
 
-  const validateQR = async (qrData: string) => {
+  const validateQR = async (qrData: string, force = false) => {
     setState("loading");
     try {
-      const res = await apiRequest("POST", "/api/tickets/validate-qr", { qrData });
-      const data: ValidationResult = await res.json();
+      const res = await apiRequest("POST", "/api/tickets/validate-qr", { qrData, ...(force ? { force: true } : {}) });
+      const data: ValidationResult & { warning?: string } = await res.json();
+
+      if (data.warning === "date_mismatch") {
+        setResult(data);
+        setPendingQrData(qrData);
+        setState("warn_date");
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        return;
+      }
+
       setResult(data);
       setState("success");
       if (navigator.vibrate) navigator.vibrate([200]);
@@ -165,7 +175,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
         const body = await fetch("/api/tickets/validate-qr", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ qrData }),
+          body: JSON.stringify({ qrData, ...(force ? { force: true } : {}) }),
         });
         const json: ValidationResult = await body.json();
         setResult(json);
@@ -379,6 +389,55 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
                 >
                   <RefreshCw className="h-4 w-4" />
                   Scan Next
+                </button>
+              </div>
+            )}
+
+            {state === "warn_date" && result && (
+              <div className="flex-1 flex flex-col p-4 gap-3" data-testid="state-warn-date">
+                <div className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center bg-orange-50 border border-orange-200 dark:bg-orange-950/40 dark:border-orange-800/50">
+                  <AlertTriangle className="h-14 w-14 text-orange-500" />
+                  <p className="text-xl font-bold text-orange-500">DATA DIFERENTE</p>
+                  <p className="text-sm text-muted-foreground">
+                    Este ingresso é para{" "}
+                    <span className="font-semibold text-foreground">
+                      {result.event?.date ?? "outra data"}
+                    </span>
+                    , não hoje.
+                  </p>
+                </div>
+
+                {result.ticket && (
+                  <div className="rounded-2xl p-4 border border-card-border bg-card">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/15">
+                        <Ticket className="h-4 w-4 text-orange-500" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm">{result.ticket.purchaserName}</p>
+                        <p className="text-xs text-muted-foreground">{result.ticket.ticketType}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={async () => {
+                    if (pendingQrData) await validateQR(pendingQrData, true);
+                  }}
+                  className="flex items-center justify-center gap-2 bg-orange-500 text-white py-3 rounded-2xl font-semibold text-sm shadow-lg active:scale-95 transition-transform"
+                  data-testid="button-confirm-date-mismatch"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Confirmar mesmo assim
+                </button>
+
+                <button
+                  onClick={handleScanNext}
+                  className="py-2.5 rounded-xl border border-card-border text-sm text-muted-foreground hover:bg-muted/30 transition-colors"
+                  data-testid="button-cancel-date-mismatch"
+                >
+                  Cancelar
                 </button>
               </div>
             )}
