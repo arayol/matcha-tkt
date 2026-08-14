@@ -397,13 +397,13 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
               <div className="flex-1 flex flex-col p-4 gap-3" data-testid="state-warn-date">
                 <div className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center bg-orange-50 border border-orange-200 dark:bg-orange-950/40 dark:border-orange-800/50">
                   <AlertTriangle className="h-14 w-14 text-orange-500" />
-                  <p className="text-xl font-bold text-orange-500">DATA DIFERENTE</p>
+                  <p className="text-xl font-bold text-orange-500">WRONG DATE</p>
                   <p className="text-sm text-muted-foreground">
-                    Este ingresso é para{" "}
+                    This ticket is for{" "}
                     <span className="font-semibold text-foreground">
-                      {result.event?.date ?? "outra data"}
+                      {result.event?.date ?? "a different date"}
                     </span>
-                    , não hoje.
+                    , not today.
                   </p>
                 </div>
 
@@ -429,7 +429,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
                   data-testid="button-confirm-date-mismatch"
                 >
                   <CheckCircle2 className="h-4 w-4" />
-                  Confirmar mesmo assim
+                  Confirm anyway
                 </button>
 
                 <button
@@ -437,7 +437,7 @@ export default function ScannerPage({ dark, toggleTheme, onLogout, user }: Scann
                   className="py-2.5 rounded-xl border border-card-border text-sm text-muted-foreground hover:bg-muted/30 transition-colors"
                   data-testid="button-cancel-date-mismatch"
                 >
-                  Cancelar
+                  Cancel
                 </button>
               </div>
             )}
