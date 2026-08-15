@@ -669,7 +669,7 @@ export async function sendReissuedTicketEmail(params: {
       ? `${event.date} · GA Ticket`
       : event?.name || "Matcha On Ice Event";
 
-    const reissueEventForPdf = event ? { ...event, name: reissueEventName } : event;
+    const reissueEventForPdf = event ? { ...event, name: reissueEventName, observations } : event;
     const pdfBuffer = await generateTicketPDF(ticket, reissueEventForPdf, { locationStreet, locationCity, locationZip });
     const pdfFilename = `ticket-${ticket.ticketUrl}.pdf`;
 
@@ -757,7 +757,7 @@ export async function sendTicketEmail(params: {
       ? `${event.date} · GA Ticket`
       : event?.name || "Matcha On Ice Event";
 
-    const confirmEventForPdf = event ? { ...event, name: confirmEventName } : event;
+    const confirmEventForPdf = event ? { ...event, name: confirmEventName, observations } : event;
     const pdfBuffer = await generateTicketPDF(ticket, confirmEventForPdf, { locationStreet, locationCity, locationZip });
     const pdfFilename = `ticket-${ticket.ticketUrl}.pdf`;
 

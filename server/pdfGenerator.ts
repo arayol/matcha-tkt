@@ -3,7 +3,7 @@ import type { Ticket, Event } from "@shared/schema";
 
 export async function generateTicketPDF(
   ticket: Ticket,
-  event: Event | undefined,
+  event: (Event & { observations?: string | null }) | undefined,
   locationData?: { locationStreet: string | null; locationCity: string | null; locationZip?: string | null },
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -72,6 +72,13 @@ export async function generateTicketPDF(
     doc.fontSize(10).fillColor(matchaGreen).font("Helvetica-Bold")
       .text(badgeText, badgeX + 10, badgeY + 6);
     y += 36;
+
+    if (event?.observations) {
+      const obsText = `📋 ${event.observations}`;
+      const obsHeight = doc.fontSize(9).font("Helvetica").heightOfString(obsText, { width: pageWidth - 40 });
+      doc.fillColor(mutedText).text(obsText, 40, y, { width: pageWidth - 40 });
+      y += obsHeight + 8;
+    }
 
     y += 4;
     doc.moveTo(40, y).lineTo(doc.page.width - 40, y)

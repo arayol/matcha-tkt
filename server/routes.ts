@@ -546,6 +546,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       let locationStreet: string | null = null;
       let locationCity: string | null = null;
       let locationZip: string | null = null;
+      let observations: string | null = null;
       if (event?.date && event.date !== "TBD") {
         const eventDateNames = await storage.listEventDateNames();
         const mapping = eventDateNames.find(edn => edn.eventDate === event.date);
@@ -553,6 +554,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           locationStreet = mapping.locationStreet;
           locationCity = mapping.locationCity;
           locationZip = mapping.locationZip;
+          observations = mapping.observations ?? null;
         }
         // General tickets always show date + GA Ticket regardless of mapping
         if (ticket.ticketType === "General") {
@@ -560,7 +562,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         }
       }
 
-      res.json({ ticket, event: event ? { ...event, displayName, locationStreet, locationCity, locationZip } : event });
+      res.json({ ticket, event: event ? { ...event, displayName, locationStreet, locationCity, locationZip, observations } : event });
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch ticket" });
     }
@@ -720,6 +722,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       let locationStreet: string | null = null;
       let locationCity: string | null = null;
       let locationZip: string | null = null;
+      let observations: string | null = null;
       if (event?.date && event.date !== "TBD") {
         const eventDateNames = await storage.listEventDateNames();
         const mapping = eventDateNames.find(edn => edn.eventDate === event.date);
@@ -727,6 +730,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           locationStreet = mapping.locationStreet;
           locationCity = mapping.locationCity;
           locationZip = mapping.locationZip;
+          observations = mapping.observations ?? null;
         }
         // General tickets always show date + GA Ticket regardless of mapping
         if (ticket.ticketType === "General") {
@@ -734,7 +738,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         }
       }
 
-      const pdfBuffer = await generateTicketPDF(ticket, resolvedEvent, { locationStreet, locationCity, locationZip });
+      const pdfBuffer = await generateTicketPDF(
+        ticket,
+        resolvedEvent ? { ...resolvedEvent, observations } : resolvedEvent,
+        { locationStreet, locationCity, locationZip }
+      );
 
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="ticket-${req.params.urlSlug}.pdf"`);

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
-import { CheckCircle2, XCircle, Clock, MapPin, Calendar, Timer, User, Ticket, Download, Share2, RotateCcw } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, MapPin, Calendar, Timer, User, Ticket, Download, Share2, RotateCcw, NotebookPen } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -107,6 +107,13 @@ export default function TicketPage() {
               <StatusIcon className={`h-5 w-5 ${status.color}`} />
               <span className={`font-semibold ${status.color}`} data-testid="text-ticket-status">{status.label}</span>
             </div>
+
+            {event?.observations && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-muted/40 border border-border/50" data-testid="observations-badge">
+                <NotebookPen className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                <span className="text-sm text-foreground">{event.observations}</span>
+              </div>
+            )}
 
             {ticket.qrCode && ticket.status === "valid" && (
               <div className="flex justify-center" data-testid="qr-code">
