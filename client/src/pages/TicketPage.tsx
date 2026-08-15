@@ -97,7 +97,7 @@ export default function TicketPage() {
             <h1 className="text-xl font-semibold text-white" data-testid="text-event-name">
               {event?.displayName || event?.name || "Event Ticket"}
             </h1>
-            <p className="text-white/80 text-sm mt-1">Matcha On Ice · {event?.locationCity ? `${event.locationCity}, CA` : "San Diego, CA"}</p>
+            <p className="text-white/80 text-sm mt-1">Matcha On Ice · {event?.location || "San Diego, CA"}</p>
           </div>
 
           <div className="p-6 space-y-5">
@@ -229,7 +229,7 @@ export default function TicketPage() {
         </div>
 
         <div className="text-center">
-          <p className="text-xs text-muted-foreground">Matcha On Ice &middot; {event?.locationCity ? `${event.locationCity}, CA` : "San Diego, CA"}</p>
+          <p className="text-xs text-muted-foreground">Matcha On Ice &middot; {event?.location || "San Diego, CA"}</p>
         </div>
       </div>
     </div>
