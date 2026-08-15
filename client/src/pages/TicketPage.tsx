@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
-import { CheckCircle2, XCircle, Clock, MapPin, Calendar, Timer, User, Ticket, Download, Share2, RotateCcw } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, MapPin, Calendar, User, Ticket, Download, Share2, RotateCcw } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -162,16 +162,15 @@ export default function TicketPage() {
                   <div className="h-px border-t border-dashed border-border" />
                   <div className="flex items-center gap-3 text-sm">
                     <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="text-muted-foreground">Date</span>
-                    <span className="ml-auto font-medium" data-testid="text-event-date">{event.date}</span>
+                    <span className="text-muted-foreground">
+                      {(ticket.ticketTime || event.time) ? "Date · Time" : "Date"}
+                    </span>
+                    <span className="ml-auto font-medium text-right" data-testid="text-event-date">
+                      {(ticket.ticketTime || event.time)
+                        ? `${event.date} · ${ticket.ticketTime || event.time}`
+                        : event.date}
+                    </span>
                   </div>
-                  {(ticket.ticketTime || event.time) && (
-                    <div className="flex items-center gap-3 text-sm">
-                      <Timer className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-muted-foreground">Time</span>
-                      <span className="ml-auto font-medium" data-testid="text-event-time">{ticket.ticketTime || event.time}</span>
-                    </div>
-                  )}
                   {event.location && (
                     <div className="flex items-center gap-3 text-sm">
                       <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
