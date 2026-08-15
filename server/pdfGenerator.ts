@@ -42,15 +42,22 @@ export async function generateTicketPDF(
     y += eventNameHeight + 10;
 
     if (event) {
-      const locationLine = locationData?.locationStreet && locationData?.locationCity
-        ? `${locationData.locationStreet}, ${locationData.locationCity}${locationData.locationZip ? ` ${locationData.locationZip}` : ""}`
-        : (event.location || "");
-      if (locationLine) {
-        const dateLineHeight = doc.fontSize(10).font("Helvetica")
-          .heightOfString(locationLine, { width: pageWidth, align: "center" });
+      if (event.location) {
+        const venueHeight = doc.fontSize(10).font("Helvetica")
+          .heightOfString(event.location, { width: pageWidth, align: "center" });
         doc.fillColor(mutedText)
-          .text(locationLine, 40, y, { width: pageWidth, align: "center" });
-        y += dateLineHeight + 8;
+          .text(event.location, 40, y, { width: pageWidth, align: "center" });
+        y += venueHeight + 4;
+      }
+      if (locationData?.locationStreet && locationData?.locationCity) {
+        const addressLine = `${locationData.locationStreet}, ${locationData.locationCity}${locationData.locationZip ? ` ${locationData.locationZip}` : ""}`;
+        const addressHeight = doc.fontSize(10).font("Helvetica")
+          .heightOfString(addressLine, { width: pageWidth, align: "center" });
+        doc.fillColor(mutedText)
+          .text(addressLine, 40, y, { width: pageWidth, align: "center" });
+        y += addressHeight + 8;
+      } else {
+        y += 4;
       }
     }
 
