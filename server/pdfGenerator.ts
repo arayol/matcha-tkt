@@ -74,9 +74,9 @@ export async function generateTicketPDF(
     y += 36;
 
     if (event?.observations) {
-      const obsText = `📋 ${event.observations}`;
-      const obsHeight = doc.fontSize(9).font("Helvetica").heightOfString(obsText, { width: pageWidth - 40 });
-      doc.fillColor(mutedText).text(obsText, 40, y, { width: pageWidth - 40 });
+      const obsText = event.observations;
+      const obsHeight = doc.fontSize(9).font("Helvetica-Bold").heightOfString(obsText, { width: pageWidth - 40 });
+      doc.fillColor(mutedText).font("Helvetica-Bold").text(obsText, 40, y, { width: pageWidth - 40 });
       y += obsHeight + 8;
     }
 
