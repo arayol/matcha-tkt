@@ -66,15 +66,16 @@ export async function generateTicketPDF(
       .dash(4, { space: 4 }).strokeColor("#e5e7eb").lineWidth(1).stroke().undash();
     y += 16;
 
-    doc.fontSize(11).fillColor(mutedText).font("Helvetica").text("TICKET HOLDER", 40, y);
+    doc.fontSize(11).fillColor(mutedText).font("Helvetica").text("TICKET HOLDER", 40, y, { align: "center", width: pageWidth });
     y += 16;
-    doc.fontSize(16).fillColor(darkText).font("Helvetica-Bold").text(ticket.purchaserName, 40, y);
+    doc.fontSize(16).fillColor(darkText).font("Helvetica-Bold").text(ticket.purchaserName, 40, y, { align: "center", width: pageWidth });
     y += 24;
 
-    const badgeX = 40;
-    const badgeY = y;
     const badgeText = ticket.ticketType || "General";
+    doc.fontSize(10).font("Helvetica-Bold");
     const badgeW = doc.widthOfString(badgeText) + 20;
+    const badgeX = 40 + (pageWidth - badgeW) / 2;
+    const badgeY = y;
     doc.roundedRect(badgeX, badgeY, badgeW, 22, 6).fill(lightBg);
     doc.fontSize(10).fillColor(matchaGreen).font("Helvetica-Bold")
       .text(badgeText, badgeX + 10, badgeY + 6);
@@ -82,8 +83,8 @@ export async function generateTicketPDF(
 
     if (event?.observations) {
       const obsText = event.observations;
-      const obsHeight = doc.fontSize(9).font("Helvetica-Bold").heightOfString(obsText, { width: pageWidth - 40 });
-      doc.fillColor(mutedText).font("Helvetica-Bold").text(obsText, 40, y, { width: pageWidth - 40 });
+      const obsHeight = doc.fontSize(9).font("Helvetica-Bold").heightOfString(obsText, { width: pageWidth, align: "center" });
+      doc.fillColor(mutedText).font("Helvetica-Bold").text(obsText, 40, y, { width: pageWidth, align: "center" });
       y += obsHeight + 8;
     }
 
