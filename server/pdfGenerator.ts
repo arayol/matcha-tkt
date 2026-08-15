@@ -20,15 +20,16 @@ export async function generateTicketPDF(
     const lightBg = "#f0f3eb";
     const pageWidth = doc.page.width - 80;
 
-    const headerCity = locationData?.locationCity || "San Diego";
+    const headerVenue = event?.location || "";
 
     doc.rect(0, 0, doc.page.width, 80).fill(matchaGreen);
 
     doc.fontSize(22).fillColor("#ffffff").font("Helvetica-Bold")
       .text("MATCHA ON ICE", 40, 22, { align: "center", width: pageWidth });
 
+    const headerSubtitle = headerVenue ? `${headerVenue}  ·  Event Ticket` : "Event Ticket";
     doc.fontSize(10).fillColor("rgba(255,255,255,0.8)").font("Helvetica")
-      .text(`${headerCity}, CA  ·  Event Ticket`, 40, 50, { align: "center", width: pageWidth });
+      .text(headerSubtitle, 40, 50, { align: "center", width: pageWidth });
 
     let y = 100;
 
@@ -43,13 +44,14 @@ export async function generateTicketPDF(
     if (event) {
       const locationLine = locationData?.locationStreet && locationData?.locationCity
         ? `${locationData.locationStreet}, ${locationData.locationCity}${locationData.locationZip ? ` ${locationData.locationZip}` : ""}`
-        : event.location || "San Diego, CA";
-      const dateLine = locationLine;
-      const dateLineHeight = doc.fontSize(10).font("Helvetica")
-        .heightOfString(dateLine, { width: pageWidth, align: "center" });
-      doc.fillColor(mutedText)
-        .text(dateLine, 40, y, { width: pageWidth, align: "center" });
-      y += dateLineHeight + 8;
+        : (event.location || "");
+      if (locationLine) {
+        const dateLineHeight = doc.fontSize(10).font("Helvetica")
+          .heightOfString(locationLine, { width: pageWidth, align: "center" });
+        doc.fillColor(mutedText)
+          .text(locationLine, 40, y, { width: pageWidth, align: "center" });
+        y += dateLineHeight + 8;
+      }
     }
 
     y += 8;
