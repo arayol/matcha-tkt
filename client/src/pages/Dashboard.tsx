@@ -62,6 +62,8 @@ interface EmailMonitoring {
     purchaserName: string;
     error: string;
     lastAttemptAt: string;
+    primaryError: string | null;
+    fallbackError: string | null;
   }>;
 }
 
@@ -78,6 +80,7 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [alertsExpanded, setAlertsExpanded] = useState(false);
   const [courtesyForm, setCourtesyForm] = useState({
     eventId: "",
     name: "",
@@ -326,6 +329,72 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
               </div>
             </div>
           )}
+
+          {isAdmin && (() => {
+            if (!emailMonitoring) return null;
+            type Alert = { key: string; title: string; detail: string };
+            const alerts: Alert[] = [];
+            if (!emailMonitoring.gmail.connected) {
+              alerts.push({
+                key: "gmail-down",
+                title: "Gmail unavailable",
+                detail: emailMonitoring.gmail.error || "Gmail connection lost. Resend fallback is active.",
+              });
+            }
+            for (const f of emailMonitoring.recentFailures) {
+              const detail = [f.primaryError && `Gmail: ${f.primaryError}`, f.fallbackError && `Resend: ${f.fallbackError}`]
+                .filter(Boolean).join(" · ") || f.error;
+              alerts.push({ key: f.id, title: `Email not delivered — ${f.purchaserName}`, detail });
+            }
+            if (alerts.length === 0) return null;
+            const visible = alertsExpanded ? alerts : alerts.slice(0, 3);
+            const hidden = alerts.length - 3;
+            return (
+              <div className="rounded-3xl border border-red-300 bg-red-50/80 dark:border-red-900 dark:bg-red-950/30 p-4 md:p-6 shadow-card" data-testid="card-system-alerts">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300 flex-shrink-0">
+                    <AlertTriangle className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg md:text-[22px] font-semibold tracking-tight text-red-900 dark:text-red-100">System Alerts</h2>
+                    <p className="text-xs md:text-sm text-red-700/70 dark:text-red-300/60 mt-0.5">Errors and delivery failures</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {visible.map((a) => (
+                    <div key={a.key} className="rounded-2xl border border-red-200 bg-white/60 dark:border-red-900 dark:bg-black/10 px-4 py-3">
+                      <p className="text-sm font-medium text-red-900 dark:text-red-100">{a.title}</p>
+                      <p className="mt-0.5 text-xs text-red-700/80 dark:text-red-300/70 leading-relaxed">{a.detail}</p>
+                    </div>
+                  ))}
+                  {!alertsExpanded && hidden > 0 && (
+                    <button
+                      onClick={() => setAlertsExpanded(true)}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-red-200 bg-white/40 dark:border-red-900 dark:bg-black/10 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-white/80 dark:text-red-300 dark:hover:bg-black/20 transition-colors"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/50 text-xs font-bold">+{hidden}</span>
+                      Show {hidden} more alert{hidden === 1 ? "" : "s"}
+                    </button>
+                  )}
+                  {alertsExpanded && alerts.length > 3 && (
+                    <button
+                      onClick={() => setAlertsExpanded(false)}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-red-200 bg-white/40 dark:border-red-900 dark:bg-black/10 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-white/80 dark:text-red-300 dark:hover:bg-black/20 transition-colors"
+                    >
+                      Show less
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => navigate("/tickets")}
+                  className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+                >
+                  Review affected tickets
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            );
+          })()}
 
           {isAdmin && <div
             className={`rounded-3xl border p-4 md:p-6 shadow-card ${

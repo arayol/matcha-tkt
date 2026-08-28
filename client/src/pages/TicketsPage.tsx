@@ -385,6 +385,10 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                        >
                         {isPending
                           ? <AlertTriangle className="h-4 w-4" />
+                          : emailFailed
+                          ? <CheckCircle2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                          : emailUnknown
+                          ? <AlertTriangle className="h-4 w-4" />
                           : ticket.status === "valid" ? <CheckCircle2 className="h-4 w-4" />
                           : ticket.status === "used" ? <Circle className="h-4 w-4" />
                           : <XCircle className="h-4 w-4" />}
