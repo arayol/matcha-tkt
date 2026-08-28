@@ -191,6 +191,22 @@ async function sendViaResend(email: PreparedTicketEmail): Promise<string> {
     throw new Error("Resend not configured");
   }
 
+  const attachments: Array<{ filename: string; content: string; content_id?: string; inline?: boolean }> = [
+    {
+      filename: email.pdfFilename,
+      content: email.pdfBuffer.toString("base64"),
+    },
+  ];
+
+  if (LOGO_BUFFER.length) {
+    attachments.push({
+      filename: "matcha-logo.png",
+      content: LOGO_BUFFER.toString("base64"),
+      content_id: "matcha-logo",
+      inline: true,
+    });
+  }
+
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -201,11 +217,8 @@ async function sendViaResend(email: PreparedTicketEmail): Promise<string> {
       from: getResendSenderEmail(),
       to: [email.to],
       subject: email.subject,
-      html: getResendHtml(email.htmlBody),
-      attachments: [{
-        filename: email.pdfFilename,
-        content: email.pdfBuffer.toString("base64"),
-      }],
+      html: email.htmlBody,
+      attachments,
     }),
   });
 
@@ -957,21 +970,10 @@ export async function sendReissuedTicketEmail(params: {
       locationZip,
     });
 
-    const reissueBanner = `
-<table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color:#7c3400;margin-bottom:0;">
-  <tr><td style="padding:14px 24px;text-align:center;">
-    <p style="margin:0;font-family:'Jost',Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;color:#ffffff;letter-spacing:0.5px;">
-      ⚠️ REISSUED TICKET — This is your updated ticket. Please disregard any previous email and use this one for entry.
-    </p>
-  </td></tr>
-</table>`;
-
-    const htmlBody = baseHtml.replace('<div class="email-container">', `<div class="email-container">${reissueBanner}`);
-
     const email: PreparedTicketEmail = {
       to: ticket.purchaserEmail,
       subject: `[REISSUED] Your ticket for ${reissueEventName} — updated`,
-      htmlBody,
+      htmlBody: baseHtml,
       pdfBuffer,
       pdfFilename,
     };
