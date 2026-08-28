@@ -6,7 +6,7 @@ import multer from "multer";
 import { storage } from "./storage";
 import { generateTicketQR } from "./qrcode";
 import { generateTicketPDF } from "./pdfGenerator";
-import { sendTicketEmail } from "./emailService";
+import { sendTicketEmail, sendReissuedTicketEmail, checkGmailConnection } from "./emailService";
 import { sendCampaignEmail, getGmailSenderInfo, checkCampaignReplies, renderCampaignPreviewHtml } from "./campaignEmailService";
 import { parseExcelBuffer, assertXlsxFilename } from "./excelParser";
 import { insertTicketSchema } from "@shared/schema";
@@ -251,10 +251,38 @@ async function migrateOldMembersTicketsToArchivedEvent() {
   }
 }
 
+/**
+ * The Gmail connector was unavailable for these tickets before delivery
+ * tracking existed. Mark only the audited records, leaving all other legacy
+ * tickets as unknown rather than guessing their delivery state.
+ */
+async function markKnownHistoricalEmailFailures() {
+  const auditedTicketIds = [
+    "20f88aa6-808d-48e9-95b8-944a2ad1c19a",
+    "0b18fa85-6224-4ea6-bd92-0f96875af8f6",
+    "c1d62e38-90c3-4219-bb77-8e403c72e9ba",
+  ];
+
+  try {
+    for (const ticketId of auditedTicketIds) {
+      const ticket = await storage.getTicket(ticketId);
+      if (!ticket || ticket.emailDeliveryStatus === "sent") continue;
+      await storage.updateTicketEmailDelivery(ticketId, {
+        emailDeliveryStatus: "failed",
+        emailDeliveryError: "Gmail not connected (historical outage)",
+        emailLastAttemptAt: ticket.purchasedAt || null,
+      });
+    }
+  } catch (err) {
+    console.error("⚠️ Historical email failure reconciliation skipped:", err);
+  }
+}
+
 export async function registerRoutes(httpServer: Server, app: Express) {
   await seedAdminUser();
   backfillEventCalendarDates().catch(() => {});
   migrateOldMembersTicketsToArchivedEvent().catch(() => {});
+  markKnownHistoricalEmailFailures().catch(() => {});
 
   app.post("/api/auth/login", (req, res, next) => {
     passport.authenticate("local", (err: any, user: any, info: any) => {
@@ -519,15 +547,20 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         }
       }
 
-      const enrichedWithStatus = { ...enriched, status: finalStatus };
+      let emailDelivery: Awaited<ReturnType<typeof sendReissuedTicketEmail>> | undefined;
+      let responseTicket = updated;
 
       if (resend) {
-        const { sendReissuedTicketEmail } = await import("./emailService");
-        sendReissuedTicketEmail({ ticket: { ...updated, status: finalStatus }, event: ev }).catch(err =>
-          console.error("⚠️ Reissued email send failed (non-blocking):", err)
-        );
+        emailDelivery = await sendReissuedTicketEmail({ ticket: { ...updated, status: finalStatus }, event: ev });
+        responseTicket = await storage.getTicket(updated.id) || updated;
       }
 
+      const enrichedWithStatus = {
+        ...enriched,
+        ...responseTicket,
+        status: finalStatus,
+        emailDelivery,
+      };
       res.json(enrichedWithStatus);
     } catch (err) {
       console.error("Edit ticket error:", err);
@@ -695,16 +728,17 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         eventLocation: event.location,
       });
 
+      let emailDelivery: Awaited<ReturnType<typeof sendTicketEmail>> | undefined;
+      let responseTicket = ticket;
       if (validation.valid) {
-        sendTicketEmail({ ticket, event, isCourtesy: true }).catch(err =>
-          console.error("⚠️ Courtesy email send failed (non-blocking):", err)
-        );
+        emailDelivery = await sendTicketEmail({ ticket, event, isCourtesy: true });
+        responseTicket = await storage.getTicket(ticket.id) || ticket;
       } else {
         await storage.updateTicketStatus(ticket.id, "pending_review");
         console.log(`⚠️ Courtesy ticket ${ticket.id} held for admin review — ${validation.reasons.join("; ")}`);
       }
 
-      res.json({ message: "Courtesy ticket created", ticket });
+      res.json({ message: "Courtesy ticket created", ticket: responseTicket, emailDelivery });
     } catch (err) {
       res.status(500).json({ error: "Failed to create courtesy ticket" });
     }
@@ -857,6 +891,47 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       });
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
+
+  app.get("/api/admin/email-monitoring", requireAdmin, async (_req, res) => {
+    try {
+      const [ticketList, gmail] = await Promise.all([
+        storage.listTickets(),
+        checkGmailConnection(),
+      ]);
+      const failedTickets = ticketList.filter(t => t.emailDeliveryStatus === "failed");
+      const pendingTickets = ticketList.filter(t => t.emailDeliveryStatus === "pending");
+      const critical = !gmail.connected || failedTickets.length > 0;
+      const recentFailures = failedTickets
+        .filter(t => t.emailLastAttemptAt || t.purchasedAt)
+        .sort((a, b) => {
+          const aTime = new Date(a.emailLastAttemptAt || a.purchasedAt || 0).getTime();
+          const bTime = new Date(b.emailLastAttemptAt || b.purchasedAt || 0).getTime();
+          return bTime - aTime;
+        })
+        .slice(0, 5)
+        .map(t => ({
+          id: t.id,
+          purchaserName: t.purchaserName,
+          error: t.emailDeliveryError || "Email delivery failed",
+          lastAttemptAt: t.emailLastAttemptAt || t.purchasedAt,
+        }));
+
+      res.json({
+        status: critical ? "critical" : pendingTickets.length > 0 ? "warning" : "healthy",
+        gmail: {
+          connected: gmail.connected,
+          senderEmail: gmail.senderEmail || null,
+          error: gmail.connected ? null : gmail.error || "Gmail not connected",
+        },
+        failedCount: failedTickets.length,
+        pendingCount: pendingTickets.length,
+        recentFailures,
+      });
+    } catch (err) {
+      console.error("Email monitoring error:", err);
+      res.status(500).json({ error: "Failed to fetch email monitoring status" });
     }
   });
 
@@ -1316,11 +1391,18 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
           await storage.updateHostingerOrder(order.id, { reconciliationStatus: "reconciled" });
 
-          sendTicketEmail({ ticket, event: matchedEvent, isCourtesy: false }).catch(err =>
-            console.error(`⚠️ Email failed for order ${order.orderNumber}:`, err)
-          );
-
-          results.push({ orderNumber: order.orderNumber, name: order.billingName || "", email: order.email, status: "sent" });
+          const emailDelivery = await sendTicketEmail({ ticket, event: matchedEvent, isCourtesy: false });
+          if (emailDelivery.success) {
+            results.push({ orderNumber: order.orderNumber, name: order.billingName || "", email: order.email, status: "sent" });
+          } else {
+            results.push({
+              orderNumber: order.orderNumber,
+              name: order.billingName || "",
+              email: order.email,
+              status: "error",
+              error: emailDelivery.error || "Email delivery failed",
+            });
+          }
         } catch (err: any) {
           results.push({ orderNumber: order.orderNumber, name: order.billingName || "", email: order.email || "", status: "error", error: err.message });
         }
@@ -1669,9 +1751,12 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         time: "11 AM - 1 PM",
         location: "San Diego, CA",
       };
-      const ok = await sendTicketEmail({ ticket: mockTicket, event: mockEvent });
-      if (ok) res.json({ sent: true, to: mockTicket.purchaserEmail });
-      else res.status(500).json({ error: "Email send failed — check server logs" });
+      const result = await sendTicketEmail({ ticket: mockTicket, event: mockEvent });
+      if (result.success) {
+        res.json({ sent: true, to: mockTicket.purchaserEmail, messageId: result.messageId });
+      } else {
+        res.status(503).json({ error: result.error || "Email send failed" });
+      }
     } catch (err: any) {
       res.status(500).json({ error: err?.message || "Unknown error" });
     }

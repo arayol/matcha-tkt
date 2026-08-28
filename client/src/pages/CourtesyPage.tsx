@@ -29,16 +29,28 @@ export default function CourtesyPage({ dark, toggleTheme, onLogout, user }: Cour
   const { data: eventList } = useQuery<EventData[]>({ queryKey: ["/api/events"] });
 
   const mutation = useMutation({
-    mutationFn: (body: { eventId: string; purchaserName: string; purchaserEmail: string; ticketType: string }) =>
-      apiRequest("POST", "/api/tickets/courtesy", body),
-    onSuccess: async () => {
+    mutationFn: async (body: { eventId: string; purchaserName: string; purchaserEmail: string; ticketType: string }) => {
+      const response = await apiRequest("POST", "/api/tickets/courtesy", body);
+      return response.json();
+    },
+    onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/scanner/stats"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/email-monitoring"] });
       setForm({ eventId: "", name: "", email: "", ticketType: "Members" });
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-      toast({ title: "Courtesy ticket created", description: "The ticket has been sent to the recipient." });
+      if (data.emailDelivery?.success) {
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 3000);
+        toast({ title: "Courtesy ticket created", description: "The ticket has been sent to the recipient." });
+      } else {
+        setShowSuccess(false);
+        toast({
+          title: "Ticket created, email not sent",
+          description: data.emailDelivery?.error || "The ticket is saved, but delivery requires attention.",
+          variant: "destructive",
+        });
+      }
     },
     onError: () => {
       toast({ title: "Failed to create ticket", variant: "destructive" });

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -44,6 +44,23 @@ function AppContent() {
   const { user, isLoading, login, logout, error } = useAuth();
   const { dark, toggle: toggleTheme } = useThemeGlobal();
   const [, navigate] = useLocation();
+  const authInitialized = useRef(false);
+  const previousUser = useRef<typeof user>(null);
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (!authInitialized.current) {
+      authInitialized.current = true;
+      previousUser.current = user;
+      return;
+    }
+
+    if (user && !previousUser.current) {
+      navigate("/");
+    }
+    previousUser.current = user;
+  }, [isLoading, user, navigate]);
 
   if (isLoading) {
     return (
@@ -73,11 +90,7 @@ function AppContent() {
         ) : (
           <>
             <Route path="/">
-              {isAdmin ? (
-                <Dashboard {...shared} />
-              ) : (
-                () => { navigate("/scan"); return null; }
-              )}
+              <Dashboard {...shared} />
             </Route>
             <Route path="/scan">
               <ScannerPage {...shared} />

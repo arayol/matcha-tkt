@@ -295,9 +295,10 @@ export class WebhookHandlers {
           });
 
           if (validation.valid) {
-            sendTicketEmail({ ticket, event: dbEvent }).catch(err =>
-              console.error("  ⚠️ Email send failed (non-blocking):", err)
-            );
+            const emailResult = await sendTicketEmail({ ticket, event: dbEvent });
+            if (!emailResult.success) {
+              console.error("  ⚠️ Email send failed:", emailResult.error);
+            }
           } else {
             await storage.updateTicketStatus(ticket.id, "pending_review");
             console.log(`  ⚠️ Ticket ${ticket.id} held for admin review — ${validation.reasons.join("; ")}`);

@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Ticket, Settings, LogOut, CheckCircle2,
   Circle, XCircle, Calendar, ScanLine, Gift, Users,
   ChevronDown, Send, AlertCircle, Menu, X, Moon, Sun,
-  Shield, Scan,
+  Shield, Scan, Activity, AlertTriangle, ArrowRight,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +42,23 @@ interface EventData {
   location: string;
 }
 
+interface EmailMonitoring {
+  status: "critical" | "warning" | "healthy";
+  gmail: {
+    connected: boolean;
+    senderEmail: string | null;
+    error: string | null;
+  };
+  failedCount: number;
+  pendingCount: number;
+  recentFailures: Array<{
+    id: string;
+    purchaserName: string;
+    error: string;
+    lastAttemptAt: string;
+  }>;
+}
+
 const TICKET_TYPES = ["Members", "General", "VIP", "Staff"];
 
 interface DashboardProps {
@@ -61,31 +78,45 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
     email: "",
     ticketType: "Members",
   });
+  const isAdmin = user.role === "adm";
 
-  const { data: stats } = useQuery<Stats>({ queryKey: ["/api/stats"] });
-  const { data: ticketList } = useQuery<TicketData[]>({ queryKey: ["/api/tickets"] });
+  const { data: stats } = useQuery<Stats>({ queryKey: ["/api/stats"], enabled: isAdmin });
+  const { data: ticketList } = useQuery<TicketData[]>({ queryKey: ["/api/tickets"], enabled: isAdmin });
   const { data: eventList } = useQuery<EventData[]>({ queryKey: ["/api/events"] });
+  const { data: emailMonitoring, isLoading: emailMonitoringLoading } = useQuery<EmailMonitoring>({
+    queryKey: ["/api/admin/email-monitoring"],
+    enabled: isAdmin,
+  });
 
   const courtesyMutation = useMutation({
-    mutationFn: () =>
-      apiRequest("POST", "/api/tickets/courtesy", {
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/tickets/courtesy", {
         eventId: courtesyForm.eventId,
         purchaserName: courtesyForm.name,
         purchaserEmail: courtesyForm.email,
         ticketType: courtesyForm.ticketType,
-      }),
-    onSuccess: async () => {
+      });
+      return response.json();
+    },
+    onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/email-monitoring"] });
       setCourtesyForm({ eventId: "", name: "", email: "", ticketType: "Members" });
-      toast({ title: "Courtesy ticket created", description: "The ticket has been sent to the recipient." });
+      if (data.emailDelivery?.success) {
+        toast({ title: "Courtesy ticket created", description: "The ticket has been sent to the recipient." });
+      } else {
+        toast({
+          title: "Ticket created, email not sent",
+          description: data.emailDelivery?.error || "The ticket is saved, but delivery requires attention.",
+          variant: "destructive",
+        });
+      }
     },
     onError: () => {
       toast({ title: "Failed to create ticket", variant: "destructive" });
     },
   });
-
-  const isAdmin = user.role === "adm";
 
   const generalCount = (ticketList || []).filter(
     (t) => t.ticketType.toLowerCase().includes("general") && t.status !== "cancelled"
@@ -226,7 +257,7 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 md:gap-4 md:grid-cols-4">
+          {isAdmin && <div className="grid grid-cols-2 gap-3 md:gap-4 md:grid-cols-4">
             <div className="rounded-3xl border border-card-border bg-card p-4 md:p-5 shadow-card" data-testid="stat-total-tickets">
               <Ticket className="h-5 w-5 mb-2 md:mb-3 text-primary" />
               <p className="text-2xl font-semibold">{stats?.totalTickets ?? 0}</p>
@@ -250,7 +281,7 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
               <p className="text-2xl font-semibold">{membersCount}</p>
               <p className="text-xs md:text-sm text-muted-foreground mt-1">Members</p>
             </div>
-          </div>
+          </div>}
 
           {eventList && eventList.length > 0 && (
             <div className="rounded-3xl border border-card-border bg-card p-4 md:p-6 shadow-card" data-testid="card-events">
@@ -284,6 +315,92 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
               </div>
             </div>
           )}
+
+          {isAdmin && <div
+            className={`rounded-3xl border p-4 md:p-6 shadow-card ${
+              emailMonitoring?.status === "critical"
+                ? "border-red-300 bg-red-50/80 dark:border-red-900 dark:bg-red-950/30"
+                : emailMonitoring?.status === "warning"
+                  ? "border-amber-300 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/30"
+                  : "border-card-border bg-card"
+            }`}
+            data-testid="card-email-monitoring"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                  emailMonitoring?.status === "critical"
+                    ? "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300"
+                    : "bg-primary/10 text-primary"
+                }`}>
+                  {emailMonitoring?.status === "critical"
+                    ? <AlertTriangle className="h-5 w-5" />
+                    : <Activity className="h-5 w-5" />}
+                </div>
+                <div>
+                  <h2 className="text-lg md:text-[22px] font-semibold tracking-tight">Monitoring &amp; Alerts</h2>
+                  <p className="text-xs md:text-sm text-muted-foreground mt-0.5">Ticket email delivery</p>
+                </div>
+              </div>
+              {!emailMonitoringLoading && (
+                <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                  emailMonitoring?.status === "critical"
+                    ? "bg-red-600 text-white"
+                    : emailMonitoring?.status === "warning"
+                      ? "bg-amber-500 text-white"
+                      : "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300"
+                }`}>
+                  {emailMonitoring?.status === "critical"
+                    ? "Critical"
+                    : emailMonitoring?.status === "warning"
+                      ? "Warning"
+                      : "Healthy"}
+                </span>
+              )}
+            </div>
+
+            {emailMonitoringLoading || !emailMonitoring ? (
+              <p className="mt-5 text-sm text-muted-foreground">Checking Gmail and recent delivery attempts...</p>
+            ) : emailMonitoring.status === "critical" ? (
+              <div className="mt-5 space-y-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">Occurrence</p>
+                  <p className="mt-1 text-sm font-medium text-red-950 dark:text-red-100">
+                    {!emailMonitoring.gmail.connected
+                      ? "Gmail is disconnected or unavailable."
+                      : `${emailMonitoring.failedCount} ticket email${emailMonitoring.failedCount === 1 ? "" : "s"} failed to send.`}
+                  </p>
+                  <p className="mt-1 text-xs text-red-800/80 dark:text-red-200/70">
+                    {emailMonitoring.gmail.error || emailMonitoring.recentFailures[0]?.error || "Email delivery failed."}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-red-200 bg-white/60 px-4 py-3 dark:border-red-900 dark:bg-black/10">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">Consequence</p>
+                  <p className="mt-1 text-sm text-red-950 dark:text-red-100">
+                    Customers may have valid tickets in the system without receiving the ticket email or PDF.
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate("/tickets")}
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+                  data-testid="button-review-email-failures"
+                >
+                  Review affected tickets
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="mt-5 flex items-center gap-3 rounded-2xl bg-green-50 px-4 py-3 dark:bg-green-950/30">
+                <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-green-600 dark:text-green-400" />
+                <div>
+                  <p className="text-sm font-medium text-green-800 dark:text-green-200">Gmail connected and no delivery failures detected.</p>
+                  <p className="mt-0.5 text-xs text-green-700/70 dark:text-green-300/70">
+                    {emailMonitoring.gmail.senderEmail || "Ticket delivery is operational."}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>}
         </main>
 
         <aside className="hidden lg:block space-y-5">

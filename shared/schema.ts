@@ -50,13 +50,18 @@ export const tickets = pgTable("tickets", {
   qrData: text("qr_data").unique(),
   ticketUrl: text("ticket_url").unique(),
   status: text("status").notNull().default("valid"),
+  emailDeliveryStatus: text("email_delivery_status"),
+  emailDeliveryError: text("email_delivery_error"),
+  emailLastAttemptAt: timestamp("email_last_attempt_at"),
+  emailSentAt: timestamp("email_sent_at"),
+  emailMessageId: text("email_message_id"),
   issuedBy: text("issued_by"),
   reconciliationStatus: text("reconciliation_status"),
   purchasedAt: timestamp("purchased_at").defaultNow(),
   usedAt: timestamp("used_at"),
 });
 
-export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true, purchasedAt: true, usedAt: true, reconciliationStatus: true });
+export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true, purchasedAt: true, usedAt: true, reconciliationStatus: true, emailLastAttemptAt: true, emailSentAt: true });
 export type InsertTicket = z.infer<typeof insertTicketSchema>;
 export type Ticket = typeof tickets.$inferSelect;
 

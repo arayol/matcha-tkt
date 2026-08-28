@@ -24,6 +24,8 @@ interface TicketData {
   eventDate: string;
   calendarDate: string | null;
   archived: boolean;
+  emailDeliveryStatus: string | null;
+  emailDeliveryError: string | null;
 }
 
 interface EventData {
@@ -92,9 +94,18 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
       }
       return res.json();
     },
-    onSuccess: (_data, vars) => {
+    onSuccess: (data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/email-monitoring"] });
       closeEditModal();
+      if (vars.resend && data.emailDelivery && !data.emailDelivery.success) {
+        toast({
+          title: "Ticket saved, email not sent",
+          description: data.emailDelivery.error || "Gmail could not deliver the reissued ticket.",
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
         title: "Ticket updated",
         description: vars.resend
@@ -334,6 +345,7 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
               <div className="divide-y divide-card-border">
                 {filtered.map((ticket, idx) => {
                   const isPending = ticket.status === "pending_review";
+                  const emailFailed = ticket.status === "valid" && ticket.emailDeliveryStatus === "failed";
                   return (
                     <div
                       key={ticket.id}
@@ -350,12 +362,17 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                       <div className={`flex h-9 w-9 items-center justify-center rounded-xl flex-shrink-0 ${
                         isPending
                           ? "bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400"
+                           : emailFailed
+                           ? "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"
                           : ticket.status === "valid"
                           ? "bg-green-50 text-green-600 dark:bg-green-950/30 dark:text-green-400"
                           : ticket.status === "used"
                           ? "bg-yellow-50 text-yellow-600 dark:bg-yellow-950/30 dark:text-yellow-400"
                           : "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"
-                      }`}>
+                       }`}
+                       title={emailFailed ? "Ticket valid — email not sent" : undefined}
+                       aria-label={emailFailed ? "Ticket valid, email not sent" : `Ticket status: ${ticket.status}`}
+                       >
                         {isPending
                           ? <AlertTriangle className="h-4 w-4" />
                           : ticket.status === "valid" ? <CheckCircle2 className="h-4 w-4" />
@@ -378,6 +395,11 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                               Pending Review
                             </span>
                           )}
+                           {emailFailed && (
+                             <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                               Email not sent
+                             </span>
+                           )}
                           {!ticket.stripeSessionId && !isPending && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-primary/10 text-primary">Courtesy</span>
                           )}

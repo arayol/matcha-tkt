@@ -16,6 +16,40 @@ const LOGO_BUFFER: Buffer = (() => {
 
 let connectionSettings: any;
 
+export interface TicketEmailResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}
+
+function safeEmailError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message
+    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/access[_-]?token[=:]\s*\S+/gi, "access_token=[redacted]")
+    .slice(0, 500);
+}
+
+async function recordTicketEmailDelivery(
+  ticketId: string | undefined,
+  data: {
+    emailDeliveryStatus: string;
+    emailDeliveryError?: string | null;
+    emailLastAttemptAt?: Date | null;
+    emailSentAt?: Date | null;
+    emailMessageId?: string | null;
+  },
+) {
+  if (!ticketId) return;
+  try {
+    const { storage } = await import("./storage");
+    await storage.updateTicketEmailDelivery(ticketId, data);
+  } catch (error) {
+    // Delivery tracking must never turn a successfully sent email into a failed send.
+    console.error("⚠️ Failed to persist ticket email delivery status:", error);
+  }
+}
+
 async function getAccessToken() {
   if (
     connectionSettings &&
@@ -639,8 +673,16 @@ function buildTicketEmailHtml(params: {
 export async function sendReissuedTicketEmail(params: {
   ticket: any;
   event: any;
-}) {
+}): Promise<TicketEmailResult> {
   const { ticket, event } = params;
+  const attemptAt = new Date();
+  await recordTicketEmailDelivery(ticket?.id, {
+    emailDeliveryStatus: "pending",
+    emailDeliveryError: null,
+    emailLastAttemptAt: attemptAt,
+    emailSentAt: null,
+    emailMessageId: null,
+  });
 
   try {
     const gmail = await getUncachableGmailClient();
@@ -709,16 +751,29 @@ export async function sendReissuedTicketEmail(params: {
       logoBuffer: LOGO_BUFFER,
     });
 
-    await gmail.users.messages.send({
+    const sendResponse = await gmail.users.messages.send({
       userId: "me",
       requestBody: { raw: rawMessage },
     });
 
     console.log(`📧 Reissued ticket email sent to ${ticket.purchaserEmail} for ticket ${ticket.id}`);
-    return true;
+    const messageId = sendResponse.data.id || undefined;
+    await recordTicketEmailDelivery(ticket?.id, {
+      emailDeliveryStatus: "sent",
+      emailDeliveryError: null,
+      emailSentAt: new Date(),
+      emailMessageId: messageId || null,
+    });
+    return { success: true, messageId };
   } catch (err) {
-    console.error("❌ Failed to send reissued ticket email:", err);
-    return false;
+    const error = safeEmailError(err);
+    console.error("❌ Failed to send reissued ticket email:", error);
+    await recordTicketEmailDelivery(ticket?.id, {
+      emailDeliveryStatus: "failed",
+      emailDeliveryError: error,
+      emailLastAttemptAt: attemptAt,
+    });
+    return { success: false, error };
   }
 }
 
@@ -726,8 +781,16 @@ export async function sendTicketEmail(params: {
   ticket: any;
   event: any;
   isCourtesy?: boolean;
-}) {
+}): Promise<TicketEmailResult> {
   const { ticket, event, isCourtesy = false } = params;
+  const attemptAt = new Date();
+  await recordTicketEmailDelivery(ticket?.id, {
+    emailDeliveryStatus: "pending",
+    emailDeliveryError: null,
+    emailLastAttemptAt: attemptAt,
+    emailSentAt: null,
+    emailMessageId: null,
+  });
 
   try {
     const gmail = await getUncachableGmailClient();
@@ -786,15 +849,45 @@ export async function sendTicketEmail(params: {
       logoBuffer: LOGO_BUFFER,
     });
 
-    await gmail.users.messages.send({
+    const sendResponse = await gmail.users.messages.send({
       userId: "me",
       requestBody: { raw: rawMessage },
     });
 
     console.log(`📧 Ticket email sent to ${ticket.purchaserEmail} for ticket ${ticket.id}`);
-    return true;
+    const messageId = sendResponse.data.id || undefined;
+    await recordTicketEmailDelivery(ticket?.id, {
+      emailDeliveryStatus: "sent",
+      emailDeliveryError: null,
+      emailSentAt: new Date(),
+      emailMessageId: messageId || null,
+    });
+    return { success: true, messageId };
   } catch (err) {
-    console.error("❌ Failed to send ticket email:", err);
-    return false;
+    const error = safeEmailError(err);
+    console.error("❌ Failed to send ticket email:", error);
+    await recordTicketEmailDelivery(ticket?.id, {
+      emailDeliveryStatus: "failed",
+      emailDeliveryError: error,
+      emailLastAttemptAt: attemptAt,
+    });
+    return { success: false, error };
+  }
+}
+
+export async function checkGmailConnection(): Promise<{
+  connected: boolean;
+  senderEmail?: string;
+  error?: string;
+}> {
+  try {
+    const gmail = await getUncachableGmailClient();
+    const profile = await gmail.users.getProfile({ userId: "me" });
+    return {
+      connected: true,
+      senderEmail: profile.data.emailAddress || getSenderEmail(),
+    };
+  } catch (error) {
+    return { connected: false, error: safeEmailError(error) };
   }
 }
