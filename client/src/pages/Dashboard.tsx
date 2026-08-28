@@ -49,8 +49,14 @@ interface EmailMonitoring {
     senderEmail: string | null;
     error: string | null;
   };
+  resend: {
+    configured: boolean;
+    senderEmail: string | null;
+  };
   failedCount: number;
+  uncertainCount: number;
   pendingCount: number;
+  recoveredByResendCount: number;
   recentFailures: Array<{
     id: string;
     purchaserName: string;
@@ -104,7 +110,12 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/email-monitoring"] });
       setCourtesyForm({ eventId: "", name: "", email: "", ticketType: "Members" });
       if (data.emailDelivery?.success) {
-        toast({ title: "Courtesy ticket created", description: "The ticket has been sent to the recipient." });
+        toast({
+          title: "Courtesy ticket created",
+          description: data.emailDelivery?.provider === "resend"
+            ? "Gmail failed, but the ticket was delivered through the Resend backup."
+            : "The ticket has been sent to the recipient through Gmail.",
+        });
       } else {
         toast({
           title: "Ticket created, email not sent",
@@ -331,7 +342,9 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
                 <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${
                   emailMonitoring?.status === "critical"
                     ? "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300"
-                    : "bg-primary/10 text-primary"
+                    : emailMonitoring?.status === "warning"
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
+                      : "bg-primary/10 text-primary"
                 }`}>
                   {emailMonitoring?.status === "critical"
                     ? <AlertTriangle className="h-5 w-5" />
@@ -360,18 +373,20 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
             </div>
 
             {emailMonitoringLoading || !emailMonitoring ? (
-              <p className="mt-5 text-sm text-muted-foreground">Checking Gmail and recent delivery attempts...</p>
+              <p className="mt-5 text-sm text-muted-foreground">Checking Gmail, Resend, and recent delivery attempts...</p>
             ) : emailMonitoring.status === "critical" ? (
               <div className="mt-5 space-y-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">Occurrence</p>
                   <p className="mt-1 text-sm font-medium text-red-950 dark:text-red-100">
-                    {!emailMonitoring.gmail.connected
-                      ? "Gmail is disconnected or unavailable."
-                      : `${emailMonitoring.failedCount} ticket email${emailMonitoring.failedCount === 1 ? "" : "s"} failed to send.`}
+                    {emailMonitoring.failedCount > 0
+                      ? `${emailMonitoring.failedCount} ticket email${emailMonitoring.failedCount === 1 ? " has" : "s have"} no confirmed delivery.`
+                      : emailMonitoring.uncertainCount > 0
+                        ? `${emailMonitoring.uncertainCount} ticket email outcome${emailMonitoring.uncertainCount === 1 ? " is" : "s are"} uncertain and needs review.`
+                      : "Gmail is unavailable and Resend is not configured."}
                   </p>
                   <p className="mt-1 text-xs text-red-800/80 dark:text-red-200/70">
-                    {emailMonitoring.gmail.error || emailMonitoring.recentFailures[0]?.error || "Email delivery failed."}
+                    {emailMonitoring.recentFailures[0]?.error || emailMonitoring.gmail.error || "Email delivery failed."}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-red-200 bg-white/60 px-4 py-3 dark:border-red-900 dark:bg-black/10">
@@ -389,13 +404,31 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
                   <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
+            ) : emailMonitoring.status === "warning" ? (
+              <div className="mt-5 flex items-start gap-3 rounded-2xl bg-amber-100/70 px-4 py-3 dark:bg-amber-950/40">
+                <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-700 dark:text-amber-300" />
+                <div>
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                    {!emailMonitoring.gmail.connected
+                      ? "Gmail is unavailable. Resend fallback is protecting ticket delivery."
+                      : emailMonitoring.recoveredByResendCount === 1
+                        ? "1 delivery was recovered by Resend."
+                        : `${emailMonitoring.recoveredByResendCount} deliveries were recovered by Resend.`}
+                  </p>
+                  <p className="mt-0.5 text-xs text-amber-800/80 dark:text-amber-200/70">
+                    {emailMonitoring.resend.configured
+                      ? `Fallback sender: ${emailMonitoring.resend.senderEmail || "Resend configured"}`
+                      : "Resend fallback is not configured."}
+                  </p>
+                </div>
+              </div>
             ) : (
               <div className="mt-5 flex items-center gap-3 rounded-2xl bg-green-50 px-4 py-3 dark:bg-green-950/30">
                 <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-green-600 dark:text-green-400" />
                 <div>
-                  <p className="text-sm font-medium text-green-800 dark:text-green-200">Gmail connected and no delivery failures detected.</p>
+                  <p className="text-sm font-medium text-green-800 dark:text-green-200">Gmail primary and Resend fallback are ready.</p>
                   <p className="mt-0.5 text-xs text-green-700/70 dark:text-green-300/70">
-                    {emailMonitoring.gmail.senderEmail || "Ticket delivery is operational."}
+                    {emailMonitoring.gmail.senderEmail || "Ticket delivery is operational."} · Resend backup configured
                   </p>
                 </div>
               </div>

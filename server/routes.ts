@@ -6,7 +6,7 @@ import multer from "multer";
 import { storage } from "./storage";
 import { generateTicketQR } from "./qrcode";
 import { generateTicketPDF } from "./pdfGenerator";
-import { sendTicketEmail, sendReissuedTicketEmail, checkGmailConnection } from "./emailService";
+import { sendTicketEmail, sendReissuedTicketEmail, checkGmailConnection, checkResendConfiguration } from "./emailService";
 import { sendCampaignEmail, getGmailSenderInfo, checkCampaignReplies, renderCampaignPreviewHtml } from "./campaignEmailService";
 import { parseExcelBuffer, assertXlsxFilename } from "./excelParser";
 import { insertTicketSchema } from "@shared/schema";
@@ -900,10 +900,27 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         storage.listTickets(),
         checkGmailConnection(),
       ]);
+      const resend = checkResendConfiguration();
       const failedTickets = ticketList.filter(t => t.emailDeliveryStatus === "failed");
+      const uncertainTickets = ticketList.filter(t => t.emailDeliveryStatus === "unknown");
       const pendingTickets = ticketList.filter(t => t.emailDeliveryStatus === "pending");
-      const critical = !gmail.connected || failedTickets.length > 0;
-      const recentFailures = failedTickets
+      const recoveryWindowStart = Date.now() - (24 * 60 * 60 * 1000);
+      const recoveredTickets = ticketList.filter(
+        t => t.emailDeliveryStatus === "sent"
+          && t.emailDeliveryProvider === "resend"
+          && t.emailFallbackUsed
+          && new Date(t.emailLastAttemptAt || t.emailSentAt || 0).getTime() >= recoveryWindowStart,
+      );
+      const critical = failedTickets.length > 0
+        || uncertainTickets.length > 0
+        || (!gmail.connected && !resend.configured);
+      const warning = !critical && (
+        !gmail.connected
+        || !resend.configured
+        || recoveredTickets.length > 0
+        || pendingTickets.length > 0
+      );
+      const recentFailures = [...failedTickets, ...uncertainTickets]
         .filter(t => t.emailLastAttemptAt || t.purchasedAt)
         .sort((a, b) => {
           const aTime = new Date(a.emailLastAttemptAt || a.purchasedAt || 0).getTime();
@@ -916,17 +933,22 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           purchaserName: t.purchaserName,
           error: t.emailDeliveryError || "Email delivery failed",
           lastAttemptAt: t.emailLastAttemptAt || t.purchasedAt,
+          primaryError: t.emailPrimaryError || null,
+          fallbackError: t.emailFallbackError || null,
         }));
 
       res.json({
-        status: critical ? "critical" : pendingTickets.length > 0 ? "warning" : "healthy",
+        status: critical ? "critical" : warning ? "warning" : "healthy",
         gmail: {
           connected: gmail.connected,
           senderEmail: gmail.senderEmail || null,
           error: gmail.connected ? null : gmail.error || "Gmail not connected",
         },
+        resend,
         failedCount: failedTickets.length,
+        uncertainCount: uncertainTickets.length,
         pendingCount: pendingTickets.length,
+        recoveredByResendCount: recoveredTickets.length,
         recentFailures,
       });
     } catch (err) {
@@ -1729,7 +1751,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/admin/send-test-email", requireAdmin, async (req, res) => {
     try {
-      const { to } = req.body;
+      const { to, provider } = req.body;
       const { sendTicketEmail } = await import("./emailService");
       const mockTicket = {
         id: "test-ticket-preview-001",
@@ -1751,11 +1773,28 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         time: "11 AM - 1 PM",
         location: "San Diego, CA",
       };
-      const result = await sendTicketEmail({ ticket: mockTicket, event: mockEvent });
+      const result = await sendTicketEmail({
+        ticket: mockTicket,
+        event: mockEvent,
+        preferredProvider: provider === "resend" ? "resend" : "auto",
+      });
       if (result.success) {
-        res.json({ sent: true, to: mockTicket.purchaserEmail, messageId: result.messageId });
+        res.json({
+          sent: true,
+          to: mockTicket.purchaserEmail,
+          messageId: result.messageId,
+          provider: result.provider,
+          fallbackUsed: result.fallbackUsed,
+          primaryError: result.primaryError || null,
+        });
       } else {
-        res.status(503).json({ error: result.error || "Email send failed" });
+        res.status(503).json({
+          error: result.error || "Email send failed",
+          provider: result.provider,
+          fallbackUsed: result.fallbackUsed,
+          primaryError: result.primaryError || null,
+          fallbackError: result.fallbackError || null,
+        });
       }
     } catch (err: any) {
       res.status(500).json({ error: err?.message || "Unknown error" });

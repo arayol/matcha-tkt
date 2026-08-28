@@ -20,6 +20,10 @@ export interface TicketEmailResult {
   success: boolean;
   messageId?: string;
   error?: string;
+  provider?: "gmail" | "resend" | "none";
+  fallbackUsed?: boolean;
+  primaryError?: string;
+  fallbackError?: string;
 }
 
 function safeEmailError(error: unknown): string {
@@ -38,6 +42,12 @@ async function recordTicketEmailDelivery(
     emailLastAttemptAt?: Date | null;
     emailSentAt?: Date | null;
     emailMessageId?: string | null;
+    emailDeliveryProvider?: string | null;
+    emailFallbackUsed?: boolean | null;
+    emailPrimaryError?: string | null;
+    emailFallbackError?: string | null;
+    emailPrimaryMessageId?: string | null;
+    emailFallbackMessageId?: string | null;
   },
 ) {
   if (!ticketId) return;
@@ -51,14 +61,6 @@ async function recordTicketEmailDelivery(
 }
 
 async function getAccessToken() {
-  if (
-    connectionSettings &&
-    connectionSettings.settings.expires_at &&
-    new Date(connectionSettings.settings.expires_at).getTime() > Date.now()
-  ) {
-    return connectionSettings.settings.access_token;
-  }
-
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY
     ? "repl " + process.env.REPL_IDENTITY
@@ -164,6 +166,229 @@ function makeRfc2822(params: {
 
   const raw = lines.join("\r\n");
   return Buffer.from(raw).toString("base64url");
+}
+
+interface PreparedTicketEmail {
+  to: string;
+  subject: string;
+  htmlBody: string;
+  pdfBuffer: Buffer;
+  pdfFilename: string;
+}
+
+function getResendSenderEmail(): string {
+  return process.env.RESEND_FROM_EMAIL || "Matcha On Ice <noreply@matchaonice.com>";
+}
+
+function getResendHtml(htmlBody: string): string {
+  if (!LOGO_BUFFER.length) return htmlBody;
+  return htmlBody.replace(/cid:matcha-logo/g, `data:image/png;base64,${LOGO_BUFFER.toString("base64")}`);
+}
+
+async function sendViaResend(email: PreparedTicketEmail): Promise<string> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error("Resend not configured");
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: getResendSenderEmail(),
+      to: [email.to],
+      subject: email.subject,
+      html: getResendHtml(email.htmlBody),
+      attachments: [{
+        filename: email.pdfFilename,
+        content: email.pdfBuffer.toString("base64"),
+      }],
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const providerError = typeof payload?.message === "string"
+      ? payload.message
+      : typeof payload?.error === "string"
+        ? payload.error
+        : `HTTP ${response.status}`;
+    throw new Error(`Resend: ${providerError}`);
+  }
+
+  if (!payload?.id || typeof payload.id !== "string") {
+    throw new Error("Resend returned no message ID");
+  }
+
+  return payload.id;
+}
+
+async function sendPreparedTicketEmail(params: {
+  ticket: any;
+  email: PreparedTicketEmail;
+  attemptAt: Date;
+  preferredProvider?: "auto" | "resend";
+}): Promise<TicketEmailResult> {
+  const { ticket, email, attemptAt, preferredProvider = "auto" } = params;
+  let gmailError: string | undefined;
+  let gmailSendAttempted = false;
+
+  if (preferredProvider === "resend") {
+    try {
+      const messageId = await sendViaResend(email);
+      await recordTicketEmailDelivery(ticket?.id, {
+        emailDeliveryStatus: "sent",
+        emailDeliveryError: null,
+        emailSentAt: new Date(),
+        emailMessageId: messageId,
+        emailDeliveryProvider: "resend",
+        emailFallbackUsed: false,
+        emailPrimaryError: null,
+        emailFallbackError: null,
+        emailPrimaryMessageId: null,
+        emailFallbackMessageId: messageId,
+      });
+      console.log(`📧 Ticket email sent directly via Resend to ${ticket.purchaserEmail} for ticket ${ticket.id}`);
+      return { success: true, messageId, provider: "resend", fallbackUsed: false };
+    } catch (error) {
+      const resendError = safeEmailError(error);
+      await recordTicketEmailDelivery(ticket?.id, {
+        emailDeliveryStatus: "failed",
+        emailDeliveryError: resendError,
+        emailLastAttemptAt: attemptAt,
+        emailDeliveryProvider: "none",
+        emailFallbackUsed: false,
+        emailPrimaryError: null,
+        emailFallbackError: resendError,
+        emailPrimaryMessageId: null,
+        emailFallbackMessageId: null,
+      });
+      return {
+        success: false,
+        error: resendError,
+        provider: "none",
+        fallbackUsed: false,
+        fallbackError: resendError,
+      };
+    }
+  }
+
+  try {
+    const gmail = await getUncachableGmailClient();
+    const rawMessage = makeRfc2822({
+      to: email.to,
+      from: `Matcha On Ice <${getSenderEmail()}>`,
+      subject: email.subject,
+      htmlBody: email.htmlBody,
+      pdfBuffer: email.pdfBuffer,
+      pdfFilename: email.pdfFilename,
+      logoBuffer: LOGO_BUFFER,
+    });
+    gmailSendAttempted = true;
+    const sendResponse = await gmail.users.messages.send({
+      userId: "me",
+      requestBody: { raw: rawMessage },
+    });
+    const messageId = sendResponse.data.id || undefined;
+    await recordTicketEmailDelivery(ticket?.id, {
+      emailDeliveryStatus: "sent",
+      emailDeliveryError: null,
+      emailSentAt: new Date(),
+      emailMessageId: messageId || null,
+      emailDeliveryProvider: "gmail",
+      emailFallbackUsed: false,
+      emailPrimaryError: null,
+      emailFallbackError: null,
+      emailPrimaryMessageId: messageId || null,
+      emailFallbackMessageId: null,
+    });
+    console.log(`📧 Ticket email sent via Gmail to ${ticket.purchaserEmail} for ticket ${ticket.id}`);
+    return { success: true, messageId, provider: "gmail", fallbackUsed: false };
+  } catch (error) {
+    gmailError = safeEmailError(error);
+    console.error(`❌ Gmail ticket email failed for ${ticket?.id}:`, gmailError);
+
+    const status = Number(
+      (error as any)?.code
+      || (error as any)?.status
+      || (error as any)?.response?.status,
+    );
+    const definitelyRejected = !gmailSendAttempted
+      || (status >= 400 && status < 500)
+      || /gmail not connected|invalid credentials|invalid[_ ]grant|insufficient permission|unauthenticated|unauthorized|forbidden/i.test(gmailError);
+
+    if (!definitelyRejected) {
+      const uncertainError = `Gmail outcome uncertain; Resend fallback was not attempted to avoid a duplicate email. ${gmailError}`;
+      await recordTicketEmailDelivery(ticket?.id, {
+        emailDeliveryStatus: "unknown",
+        emailDeliveryError: uncertainError,
+        emailLastAttemptAt: attemptAt,
+        emailDeliveryProvider: "gmail",
+        emailFallbackUsed: false,
+        emailPrimaryError: gmailError,
+        emailFallbackError: null,
+        emailPrimaryMessageId: null,
+        emailFallbackMessageId: null,
+      });
+      return {
+        success: false,
+        error: uncertainError,
+        provider: "none",
+        fallbackUsed: false,
+        primaryError: gmailError,
+      };
+    }
+  }
+
+  try {
+    const messageId = await sendViaResend(email);
+    await recordTicketEmailDelivery(ticket?.id, {
+      emailDeliveryStatus: "sent",
+      emailDeliveryError: null,
+      emailSentAt: new Date(),
+      emailMessageId: messageId,
+      emailDeliveryProvider: "resend",
+      emailFallbackUsed: true,
+      emailPrimaryError: gmailError,
+      emailFallbackError: null,
+      emailPrimaryMessageId: null,
+      emailFallbackMessageId: messageId,
+    });
+    console.log(`📧 Ticket email sent via Resend fallback to ${ticket.purchaserEmail} for ticket ${ticket.id}`);
+    return {
+      success: true,
+      messageId,
+      provider: "resend",
+      fallbackUsed: true,
+      primaryError: gmailError,
+    };
+  } catch (error) {
+    const resendError = safeEmailError(error);
+    const combinedError = `Gmail: ${gmailError || "unknown error"}; Resend: ${resendError}`;
+    console.error(`❌ Gmail and Resend ticket email failed for ${ticket?.id}:`, combinedError);
+    await recordTicketEmailDelivery(ticket?.id, {
+      emailDeliveryStatus: "failed",
+      emailDeliveryError: combinedError,
+      emailLastAttemptAt: attemptAt,
+      emailDeliveryProvider: "none",
+      emailFallbackUsed: true,
+      emailPrimaryError: gmailError,
+      emailFallbackError: resendError,
+      emailPrimaryMessageId: null,
+      emailFallbackMessageId: null,
+    });
+    return {
+      success: false,
+      error: combinedError,
+      provider: "none",
+      fallbackUsed: true,
+      primaryError: gmailError,
+      fallbackError: resendError,
+    };
+  }
 }
 
 function buildTicketEmailHtml(params: {
@@ -682,13 +907,15 @@ export async function sendReissuedTicketEmail(params: {
     emailLastAttemptAt: attemptAt,
     emailSentAt: null,
     emailMessageId: null,
+    emailDeliveryProvider: null,
+    emailFallbackUsed: false,
+    emailPrimaryError: null,
+    emailFallbackError: null,
+    emailPrimaryMessageId: null,
+    emailFallbackMessageId: null,
   });
 
   try {
-    const gmail = await getUncachableGmailClient();
-    const senderEmail = getSenderEmail();
-    const fromHeader = `Matcha On Ice <${senderEmail}>`;
-
     let locationStreet: string | null = null;
     let locationCity: string | null = null;
     let locationZip: string | null = null;
@@ -741,39 +968,25 @@ export async function sendReissuedTicketEmail(params: {
 
     const htmlBody = baseHtml.replace('<div class="email-container">', `<div class="email-container">${reissueBanner}`);
 
-    const rawMessage = makeRfc2822({
+    const email: PreparedTicketEmail = {
       to: ticket.purchaserEmail,
-      from: fromHeader,
       subject: `[REISSUED] Your ticket for ${reissueEventName} — updated`,
       htmlBody,
       pdfBuffer,
       pdfFilename,
-      logoBuffer: LOGO_BUFFER,
-    });
-
-    const sendResponse = await gmail.users.messages.send({
-      userId: "me",
-      requestBody: { raw: rawMessage },
-    });
-
-    console.log(`📧 Reissued ticket email sent to ${ticket.purchaserEmail} for ticket ${ticket.id}`);
-    const messageId = sendResponse.data.id || undefined;
-    await recordTicketEmailDelivery(ticket?.id, {
-      emailDeliveryStatus: "sent",
-      emailDeliveryError: null,
-      emailSentAt: new Date(),
-      emailMessageId: messageId || null,
-    });
-    return { success: true, messageId };
+    };
+    return await sendPreparedTicketEmail({ ticket, email, attemptAt });
   } catch (err) {
     const error = safeEmailError(err);
-    console.error("❌ Failed to send reissued ticket email:", error);
+    console.error("❌ Failed to prepare reissued ticket email:", error);
     await recordTicketEmailDelivery(ticket?.id, {
       emailDeliveryStatus: "failed",
       emailDeliveryError: error,
       emailLastAttemptAt: attemptAt,
+      emailDeliveryProvider: "none",
+      emailFallbackUsed: false,
     });
-    return { success: false, error };
+    return { success: false, error, provider: "none", fallbackUsed: false };
   }
 }
 
@@ -781,8 +994,9 @@ export async function sendTicketEmail(params: {
   ticket: any;
   event: any;
   isCourtesy?: boolean;
+  preferredProvider?: "auto" | "resend";
 }): Promise<TicketEmailResult> {
-  const { ticket, event, isCourtesy = false } = params;
+  const { ticket, event, isCourtesy = false, preferredProvider = "auto" } = params;
   const attemptAt = new Date();
   await recordTicketEmailDelivery(ticket?.id, {
     emailDeliveryStatus: "pending",
@@ -790,14 +1004,15 @@ export async function sendTicketEmail(params: {
     emailLastAttemptAt: attemptAt,
     emailSentAt: null,
     emailMessageId: null,
+    emailDeliveryProvider: null,
+    emailFallbackUsed: false,
+    emailPrimaryError: null,
+    emailFallbackError: null,
+    emailPrimaryMessageId: null,
+    emailFallbackMessageId: null,
   });
 
   try {
-    const gmail = await getUncachableGmailClient();
-
-    const senderEmail = getSenderEmail();
-    const fromHeader = `Matcha On Ice <${senderEmail}>`;
-
     let locationStreet: string | null = null;
     let locationCity: string | null = null;
     let locationZip: string | null = null;
@@ -839,39 +1054,25 @@ export async function sendTicketEmail(params: {
       observations,
     });
 
-    const rawMessage = makeRfc2822({
+    const email: PreparedTicketEmail = {
       to: ticket.purchaserEmail,
-      from: fromHeader,
       subject: `Your ticket for ${confirmEventName} is confirmed!`,
       htmlBody,
       pdfBuffer,
       pdfFilename,
-      logoBuffer: LOGO_BUFFER,
-    });
-
-    const sendResponse = await gmail.users.messages.send({
-      userId: "me",
-      requestBody: { raw: rawMessage },
-    });
-
-    console.log(`📧 Ticket email sent to ${ticket.purchaserEmail} for ticket ${ticket.id}`);
-    const messageId = sendResponse.data.id || undefined;
-    await recordTicketEmailDelivery(ticket?.id, {
-      emailDeliveryStatus: "sent",
-      emailDeliveryError: null,
-      emailSentAt: new Date(),
-      emailMessageId: messageId || null,
-    });
-    return { success: true, messageId };
+    };
+    return await sendPreparedTicketEmail({ ticket, email, attemptAt, preferredProvider });
   } catch (err) {
     const error = safeEmailError(err);
-    console.error("❌ Failed to send ticket email:", error);
+    console.error("❌ Failed to prepare ticket email:", error);
     await recordTicketEmailDelivery(ticket?.id, {
       emailDeliveryStatus: "failed",
       emailDeliveryError: error,
       emailLastAttemptAt: attemptAt,
+      emailDeliveryProvider: "none",
+      emailFallbackUsed: false,
     });
-    return { success: false, error };
+    return { success: false, error, provider: "none", fallbackUsed: false };
   }
 }
 
@@ -882,12 +1083,30 @@ export async function checkGmailConnection(): Promise<{
 }> {
   try {
     const gmail = await getUncachableGmailClient();
-    const profile = await gmail.users.getProfile({ userId: "me" });
-    return {
-      connected: true,
-      senderEmail: profile.data.emailAddress || getSenderEmail(),
-    };
+    try {
+      const profile = await gmail.users.getProfile({ userId: "me" });
+      return {
+        connected: true,
+        senderEmail: profile.data.emailAddress || getSenderEmail(),
+      };
+    } catch (error) {
+      const safeError = safeEmailError(error);
+      if (/insufficient permission/i.test(safeError)) {
+        return { connected: true, senderEmail: getSenderEmail() };
+      }
+      throw error;
+    }
   } catch (error) {
     return { connected: false, error: safeEmailError(error) };
   }
+}
+
+export function checkResendConfiguration(): {
+  configured: boolean;
+  senderEmail: string | null;
+} {
+  return {
+    configured: Boolean(process.env.RESEND_API_KEY),
+    senderEmail: process.env.RESEND_API_KEY ? getResendSenderEmail() : null,
+  };
 }

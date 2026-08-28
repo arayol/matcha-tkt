@@ -26,6 +26,8 @@ interface TicketData {
   archived: boolean;
   emailDeliveryStatus: string | null;
   emailDeliveryError: string | null;
+  emailDeliveryProvider: string | null;
+  emailFallbackUsed: boolean | null;
 }
 
 interface EventData {
@@ -109,7 +111,9 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
       toast({
         title: "Ticket updated",
         description: vars.resend
-          ? "Ticket saved and reissue email sent."
+          ? data.emailDelivery?.provider === "resend"
+            ? "Ticket saved and reissue email sent through the Resend fallback."
+            : "Ticket saved and reissue email sent through Gmail."
           : "Ticket information has been updated.",
       });
     },
@@ -346,6 +350,10 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                 {filtered.map((ticket, idx) => {
                   const isPending = ticket.status === "pending_review";
                   const emailFailed = ticket.status === "valid" && ticket.emailDeliveryStatus === "failed";
+                  const emailUnknown = ticket.status === "valid" && ticket.emailDeliveryStatus === "unknown";
+                  const fallbackDelivered = ticket.emailDeliveryStatus === "sent"
+                    && ticket.emailDeliveryProvider === "resend"
+                    && ticket.emailFallbackUsed;
                   return (
                     <div
                       key={ticket.id}
@@ -362,16 +370,18 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                       <div className={`flex h-9 w-9 items-center justify-center rounded-xl flex-shrink-0 ${
                         isPending
                           ? "bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400"
-                           : emailFailed
+                            : emailFailed
                            ? "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"
+                           : emailUnknown
+                           ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
                           : ticket.status === "valid"
                           ? "bg-green-50 text-green-600 dark:bg-green-950/30 dark:text-green-400"
                           : ticket.status === "used"
                           ? "bg-yellow-50 text-yellow-600 dark:bg-yellow-950/30 dark:text-yellow-400"
                           : "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"
                        }`}
-                       title={emailFailed ? "Ticket valid — email not sent" : undefined}
-                       aria-label={emailFailed ? "Ticket valid, email not sent" : `Ticket status: ${ticket.status}`}
+                       title={emailFailed ? "Ticket valid — email not sent" : emailUnknown ? "Ticket valid — delivery status unknown" : undefined}
+                       aria-label={emailFailed ? "Ticket valid, email not sent" : emailUnknown ? "Ticket valid, delivery status unknown" : `Ticket status: ${ticket.status}`}
                        >
                         {isPending
                           ? <AlertTriangle className="h-4 w-4" />
@@ -398,6 +408,16 @@ export default function TicketsPage({ dark, toggleTheme, onLogout, user }: Ticke
                            {emailFailed && (
                              <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300">
                                Email not sent
+                             </span>
+                           )}
+                           {emailUnknown && (
+                             <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                               Delivery status unknown
+                             </span>
+                           )}
+                           {fallbackDelivered && (
+                             <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                               Sent via Resend backup
                              </span>
                            )}
                           {!ticket.stripeSessionId && !isPending && (

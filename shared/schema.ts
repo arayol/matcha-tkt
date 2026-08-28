@@ -55,13 +55,19 @@ export const tickets = pgTable("tickets", {
   emailLastAttemptAt: timestamp("email_last_attempt_at"),
   emailSentAt: timestamp("email_sent_at"),
   emailMessageId: text("email_message_id"),
+  emailDeliveryProvider: text("email_delivery_provider"),
+  emailFallbackUsed: boolean("email_fallback_used").default(false),
+  emailPrimaryError: text("email_primary_error"),
+  emailFallbackError: text("email_fallback_error"),
+  emailPrimaryMessageId: text("email_primary_message_id"),
+  emailFallbackMessageId: text("email_fallback_message_id"),
   issuedBy: text("issued_by"),
   reconciliationStatus: text("reconciliation_status"),
   purchasedAt: timestamp("purchased_at").defaultNow(),
   usedAt: timestamp("used_at"),
 });
 
-export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true, purchasedAt: true, usedAt: true, reconciliationStatus: true, emailLastAttemptAt: true, emailSentAt: true });
+export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true, purchasedAt: true, usedAt: true, reconciliationStatus: true, emailLastAttemptAt: true, emailSentAt: true, emailFallbackUsed: true });
 export type InsertTicket = z.infer<typeof insertTicketSchema>;
 export type Ticket = typeof tickets.$inferSelect;
 

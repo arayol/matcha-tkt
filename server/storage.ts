@@ -46,6 +46,12 @@ export interface IStorage {
     emailLastAttemptAt?: Date | null;
     emailSentAt?: Date | null;
     emailMessageId?: string | null;
+    emailDeliveryProvider?: string | null;
+    emailFallbackUsed?: boolean | null;
+    emailPrimaryError?: string | null;
+    emailFallbackError?: string | null;
+    emailPrimaryMessageId?: string | null;
+    emailFallbackMessageId?: string | null;
   }): Promise<Ticket | undefined>;
   updateTicketStatus(id: string, status: string, usedAt?: Date): Promise<Ticket | undefined>;
   resetTicketToValid(id: string): Promise<Ticket | undefined>;
@@ -264,6 +270,12 @@ export class DatabaseStorage implements IStorage {
     emailLastAttemptAt?: Date | null;
     emailSentAt?: Date | null;
     emailMessageId?: string | null;
+    emailDeliveryProvider?: string | null;
+    emailFallbackUsed?: boolean | null;
+    emailPrimaryError?: string | null;
+    emailFallbackError?: string | null;
+    emailPrimaryMessageId?: string | null;
+    emailFallbackMessageId?: string | null;
   }): Promise<Ticket | undefined> {
     const [updated] = await db.update(tickets).set(data).where(eq(tickets.id, id)).returning();
     return updated;

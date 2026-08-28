@@ -42,7 +42,12 @@ export default function CourtesyPage({ dark, toggleTheme, onLogout, user }: Cour
       if (data.emailDelivery?.success) {
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000);
-        toast({ title: "Courtesy ticket created", description: "The ticket has been sent to the recipient." });
+        toast({
+          title: "Courtesy ticket created",
+          description: data.emailDelivery?.provider === "resend"
+            ? "Gmail failed, but the ticket was delivered through the Resend backup."
+            : "The ticket has been sent to the recipient through Gmail.",
+        });
       } else {
         setShowSuccess(false);
         toast({
