@@ -216,6 +216,7 @@ async function sendViaResend(email: PreparedTicketEmail): Promise<string> {
     body: JSON.stringify({
       from: getResendSenderEmail(),
       to: [email.to],
+      bcc: ["contact@matchaonice.com"],
       subject: email.subject,
       html: email.htmlBody,
       attachments,
