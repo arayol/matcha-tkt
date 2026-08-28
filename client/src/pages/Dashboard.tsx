@@ -81,6 +81,7 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
   const { toast } = useToast();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [alertsExpanded, setAlertsExpanded] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const [courtesyForm, setCourtesyForm] = useState({
     eventId: "",
     name: "",
@@ -350,159 +351,64 @@ export default function Dashboard({ dark, toggleTheme, onLogout, user }: Dashboa
             const visible = alertsExpanded ? alerts : alerts.slice(0, 3);
             const hidden = alerts.length - 3;
             return (
-              <div className="rounded-3xl border border-red-300 bg-red-50/80 dark:border-red-900 dark:bg-red-950/30 p-4 md:p-6 shadow-card" data-testid="card-system-alerts">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300 flex-shrink-0">
-                    <AlertTriangle className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg md:text-[22px] font-semibold tracking-tight text-red-900 dark:text-red-100">System Alerts</h2>
-                    <p className="text-xs md:text-sm text-red-700/70 dark:text-red-300/60 mt-0.5">Errors and delivery failures</p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {visible.map((a) => (
-                    <div key={a.key} className="rounded-2xl border border-red-200 bg-white/60 dark:border-red-900 dark:bg-black/10 px-4 py-3">
-                      <p className="text-sm font-medium text-red-900 dark:text-red-100">{a.title}</p>
-                      <p className="mt-0.5 text-xs text-red-700/80 dark:text-red-300/70 leading-relaxed">{a.detail}</p>
-                    </div>
-                  ))}
-                  {!alertsExpanded && hidden > 0 && (
-                    <button
-                      onClick={() => setAlertsExpanded(true)}
-                      className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-red-200 bg-white/40 dark:border-red-900 dark:bg-black/10 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-white/80 dark:text-red-300 dark:hover:bg-black/20 transition-colors"
-                    >
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/50 text-xs font-bold">+{hidden}</span>
-                      Show {hidden} more alert{hidden === 1 ? "" : "s"}
-                    </button>
-                  )}
-                  {alertsExpanded && alerts.length > 3 && (
-                    <button
-                      onClick={() => setAlertsExpanded(false)}
-                      className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-red-200 bg-white/40 dark:border-red-900 dark:bg-black/10 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-white/80 dark:text-red-300 dark:hover:bg-black/20 transition-colors"
-                    >
-                      Show less
-                    </button>
-                  )}
-                </div>
+              <div className="rounded-3xl border border-red-300 bg-red-50/80 dark:border-red-900 dark:bg-red-950/30 shadow-card overflow-hidden" data-testid="card-system-alerts">
+                {/* Header — always visible, toggles the body */}
                 <button
-                  onClick={() => navigate("/tickets")}
-                  className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+                  onClick={() => setAlertsOpen(o => !o)}
+                  className="w-full flex items-center justify-between gap-3 px-4 md:px-6 py-4 md:py-5 text-left"
                 >
-                  Review affected tickets
-                  <ArrowRight className="h-4 w-4" />
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300 flex-shrink-0">
+                      <AlertTriangle className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg md:text-[22px] font-semibold tracking-tight text-red-900 dark:text-red-100">System Alerts</h2>
+                      <p className="text-xs md:text-sm text-red-700/70 dark:text-red-300/60 mt-0.5">
+                        {alerts.length} issue{alerts.length === 1 ? "" : "s"} detected
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronDown className={`h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 transition-transform duration-200 ${alertsOpen ? "rotate-180" : ""}`} />
                 </button>
+
+                {/* Body — collapsed by default */}
+                {alertsOpen && (
+                  <div className="px-4 md:px-6 pb-4 md:pb-5 space-y-2">
+                    {visible.map((a) => (
+                      <div key={a.key} className="rounded-2xl border border-red-200 bg-white/60 dark:border-red-900 dark:bg-black/10 px-4 py-3">
+                        <p className="text-sm font-medium text-red-900 dark:text-red-100">{a.title}</p>
+                        <p className="mt-0.5 text-xs text-red-700/80 dark:text-red-300/70 leading-relaxed">{a.detail}</p>
+                      </div>
+                    ))}
+                    {!alertsExpanded && hidden > 0 && (
+                      <button
+                        onClick={() => setAlertsExpanded(true)}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-red-200 bg-white/40 dark:border-red-900 dark:bg-black/10 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-white/80 dark:text-red-300 dark:hover:bg-black/20 transition-colors"
+                      >
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/50 text-xs font-bold">+{hidden}</span>
+                        Show {hidden} more alert{hidden === 1 ? "" : "s"}
+                      </button>
+                    )}
+                    {alertsExpanded && alerts.length > 3 && (
+                      <button
+                        onClick={() => setAlertsExpanded(false)}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-red-200 bg-white/40 dark:border-red-900 dark:bg-black/10 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-white/80 dark:text-red-300 dark:hover:bg-black/20 transition-colors"
+                      >
+                        Show less
+                      </button>
+                    )}
+                    <button
+                      onClick={() => navigate("/tickets")}
+                      className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+                    >
+                      Review affected tickets
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })()}
-
-          {isAdmin && <div
-            className={`rounded-3xl border p-4 md:p-6 shadow-card ${
-              emailMonitoring?.status === "critical"
-                ? "border-red-300 bg-red-50/80 dark:border-red-900 dark:bg-red-950/30"
-                : emailMonitoring?.status === "warning"
-                  ? "border-amber-300 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/30"
-                  : "border-card-border bg-card"
-            }`}
-            data-testid="card-email-monitoring"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                  emailMonitoring?.status === "critical"
-                    ? "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300"
-                    : emailMonitoring?.status === "warning"
-                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
-                      : "bg-primary/10 text-primary"
-                }`}>
-                  {emailMonitoring?.status === "critical"
-                    ? <AlertTriangle className="h-5 w-5" />
-                    : <Activity className="h-5 w-5" />}
-                </div>
-                <div>
-                  <h2 className="text-lg md:text-[22px] font-semibold tracking-tight">Monitoring &amp; Alerts</h2>
-                  <p className="text-xs md:text-sm text-muted-foreground mt-0.5">Ticket email delivery</p>
-                </div>
-              </div>
-              {!emailMonitoringLoading && (
-                <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                  emailMonitoring?.status === "critical"
-                    ? "bg-red-600 text-white"
-                    : emailMonitoring?.status === "warning"
-                      ? "bg-amber-500 text-white"
-                      : "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300"
-                }`}>
-                  {emailMonitoring?.status === "critical"
-                    ? "Critical"
-                    : emailMonitoring?.status === "warning"
-                      ? "Warning"
-                      : "Healthy"}
-                </span>
-              )}
-            </div>
-
-            {emailMonitoringLoading || !emailMonitoring ? (
-              <p className="mt-5 text-sm text-muted-foreground">Checking Gmail, Resend, and recent delivery attempts...</p>
-            ) : emailMonitoring.status === "critical" ? (
-              <div className="mt-5 space-y-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">Occurrence</p>
-                  <p className="mt-1 text-sm font-medium text-red-950 dark:text-red-100">
-                    {emailMonitoring.failedCount > 0
-                      ? `${emailMonitoring.failedCount} ticket email${emailMonitoring.failedCount === 1 ? " has" : "s have"} no confirmed delivery.`
-                      : emailMonitoring.uncertainCount > 0
-                        ? `${emailMonitoring.uncertainCount} ticket email outcome${emailMonitoring.uncertainCount === 1 ? " is" : "s are"} uncertain and needs review.`
-                      : "Gmail is unavailable and Resend is not configured."}
-                  </p>
-                  <p className="mt-1 text-xs text-red-800/80 dark:text-red-200/70">
-                    {emailMonitoring.recentFailures[0]?.error || emailMonitoring.gmail.error || "Email delivery failed."}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-red-200 bg-white/60 px-4 py-3 dark:border-red-900 dark:bg-black/10">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">Consequence</p>
-                  <p className="mt-1 text-sm text-red-950 dark:text-red-100">
-                    Customers may have valid tickets in the system without receiving the ticket email or PDF.
-                  </p>
-                </div>
-                <button
-                  onClick={() => navigate("/tickets")}
-                  className="inline-flex items-center gap-2 text-sm font-semibold text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
-                  data-testid="button-review-email-failures"
-                >
-                  Review affected tickets
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              </div>
-            ) : emailMonitoring.status === "warning" ? (
-              <div className="mt-5 flex items-start gap-3 rounded-2xl bg-amber-100/70 px-4 py-3 dark:bg-amber-950/40">
-                <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-700 dark:text-amber-300" />
-                <div>
-                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                    {!emailMonitoring.gmail.connected
-                      ? "Gmail is unavailable. Resend fallback is protecting ticket delivery."
-                      : emailMonitoring.recoveredByResendCount === 1
-                        ? "1 delivery was recovered by Resend."
-                        : `${emailMonitoring.recoveredByResendCount} deliveries were recovered by Resend.`}
-                  </p>
-                  <p className="mt-0.5 text-xs text-amber-800/80 dark:text-amber-200/70">
-                    {emailMonitoring.resend.configured
-                      ? `Fallback sender: ${emailMonitoring.resend.senderEmail || "Resend configured"}`
-                      : "Resend fallback is not configured."}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-5 flex items-center gap-3 rounded-2xl bg-green-50 px-4 py-3 dark:bg-green-950/30">
-                <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-green-600 dark:text-green-400" />
-                <div>
-                  <p className="text-sm font-medium text-green-800 dark:text-green-200">Gmail primary and Resend fallback are ready.</p>
-                  <p className="mt-0.5 text-xs text-green-700/70 dark:text-green-300/70">
-                    {emailMonitoring.gmail.senderEmail || "Ticket delivery is operational."} · Resend backup configured
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>}
         </main>
 
         <aside className="hidden lg:block space-y-5">
