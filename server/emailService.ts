@@ -1,6 +1,5 @@
-// Gmail integration connector (google-mail OAuth)
-// Uses getUncachableGmailClient() — never cache, tokens expire
-import { google } from "googleapis";
+// Gmail via @replit/connectors-sdk — tokens refreshed automatically by the SDK
+import { ReplitConnectors } from "@replit/connectors-sdk";
 import { generateTicketPDF } from "./pdfGenerator";
 import * as fs from "fs";
 import * as path from "path";
@@ -13,8 +12,6 @@ const LOGO_BUFFER: Buffer = (() => {
     return Buffer.alloc(0);
   }
 })();
-
-let connectionSettings: any;
 
 export interface TicketEmailResult {
   success: boolean;
@@ -60,57 +57,46 @@ async function recordTicketEmailDelivery(
   }
 }
 
-async function getAccessToken() {
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY
-    ? "repl " + process.env.REPL_IDENTITY
-    : process.env.WEB_REPL_RENEWAL
-      ? "depl " + process.env.WEB_REPL_RENEWAL
-      : null;
-
-  if (!xReplitToken) {
-    throw new Error("X-Replit-Token not found for repl/depl");
-  }
-
-  connectionSettings = await fetch(
-    "https://" +
-      hostname +
-      "/api/v2/connection?include_secrets=true&connector_names=google-mail",
-    {
-      headers: {
-        Accept: "application/json",
-        "X-Replit-Token": xReplitToken,
-      },
-    },
-  )
-    .then((res) => res.json())
-    .then((data) => data.items?.[0]);
-
-  const accessToken =
-    connectionSettings?.settings?.access_token ||
-    connectionSettings?.settings?.oauth?.credentials?.access_token;
-
-  if (!connectionSettings || !accessToken) {
-    throw new Error("Gmail not connected");
-  }
-
-  return accessToken;
+// Create a fresh connector per request — never cache; the SDK refreshes tokens automatically.
+function createGmailConnector() {
+  return new ReplitConnectors();
 }
 
-function getSenderEmail(): string {
-  return (
-    connectionSettings?.settings?.email ||
-    connectionSettings?.settings?.oauth?.credentials?.email ||
-    connectionSettings?.settings?.user_email ||
-    "noreply@matchaonice.com"
-  );
-}
+async function sendViaGmail(email: PreparedTicketEmail): Promise<string> {
+  const connectors = createGmailConnector();
 
-async function getUncachableGmailClient() {
-  const accessToken = await getAccessToken();
-  const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({ access_token: accessToken });
-  return google.gmail({ version: "v1", auth: oauth2Client });
+  // Best-effort: get the authenticated sender's address from the profile endpoint.
+  let senderEmail = "noreply@matchaonice.com";
+  try {
+    const profileRes = await connectors.proxy("google-mail", "/gmail/v1/users/me/profile");
+    if (profileRes.ok) {
+      const profile = await profileRes.json() as { emailAddress?: string };
+      if (profile?.emailAddress) senderEmail = profile.emailAddress;
+    }
+  } catch { /* fall through to default */ }
+
+  const rawMessage = makeRfc2822({
+    to: email.to,
+    from: `Matcha On Ice <${senderEmail}>`,
+    subject: email.subject,
+    htmlBody: email.htmlBody,
+    pdfBuffer: email.pdfBuffer,
+    pdfFilename: email.pdfFilename,
+    logoBuffer: LOGO_BUFFER,
+  });
+
+  const sendRes = await connectors.proxy("google-mail", "/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ raw: rawMessage }),
+  });
+
+  const payload = await sendRes.json().catch(() => ({})) as any;
+  if (!sendRes.ok) {
+    const errMsg = payload?.error?.message || payload?.message || `HTTP ${sendRes.status}`;
+    throw Object.assign(new Error(errMsg), { status: sendRes.status });
+  }
+  return payload.id || "";
 }
 
 function makeRfc2822(params: {
@@ -291,22 +277,8 @@ async function sendPreparedTicketEmail(params: {
   }
 
   try {
-    const gmail = await getUncachableGmailClient();
-    const rawMessage = makeRfc2822({
-      to: email.to,
-      from: `Matcha On Ice <${getSenderEmail()}>`,
-      subject: email.subject,
-      htmlBody: email.htmlBody,
-      pdfBuffer: email.pdfBuffer,
-      pdfFilename: email.pdfFilename,
-      logoBuffer: LOGO_BUFFER,
-    });
     gmailSendAttempted = true;
-    const sendResponse = await gmail.users.messages.send({
-      userId: "me",
-      requestBody: { raw: rawMessage },
-    });
-    const messageId = sendResponse.data.id || undefined;
+    const messageId = await sendViaGmail(email) || undefined;
     await recordTicketEmailDelivery(ticket?.id, {
       emailDeliveryStatus: "sent",
       emailDeliveryError: null,
@@ -1085,20 +1057,19 @@ export async function checkGmailConnection(): Promise<{
   error?: string;
 }> {
   try {
-    const gmail = await getUncachableGmailClient();
-    try {
-      const profile = await gmail.users.getProfile({ userId: "me" });
-      return {
-        connected: true,
-        senderEmail: profile.data.emailAddress || getSenderEmail(),
-      };
-    } catch (error) {
-      const safeError = safeEmailError(error);
-      if (/insufficient permission/i.test(safeError)) {
-        return { connected: true, senderEmail: getSenderEmail() };
-      }
-      throw error;
+    const connectors = createGmailConnector();
+    const res = await connectors.proxy("google-mail", "/gmail/v1/users/me/profile");
+    if (res.ok) {
+      const data = await res.json() as { emailAddress?: string };
+      return { connected: true, senderEmail: data?.emailAddress || "Gmail connected" };
     }
+    // 403 on profile doesn't mean we can't send — gmail.send scope may still work
+    if (res.status === 403) {
+      return { connected: true, senderEmail: "Gmail connected" };
+    }
+    const errData = await res.json().catch(() => ({})) as any;
+    const errMsg = errData?.error?.message || `HTTP ${res.status}`;
+    return { connected: false, error: errMsg };
   } catch (error) {
     return { connected: false, error: safeEmailError(error) };
   }
