@@ -1,4 +1,4 @@
-# Matcha On Ice - Sistema de Gestão de Ingressos
+# Sistema de Gestão de Ingressos
 
   > **Modo: PRODUÇÃO** | Marco T0 - Validação Técnica
 
