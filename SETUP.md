@@ -1,4 +1,4 @@
-# Matcha On Ice - Setup Guide
+# Setup Guide
 
 ## Quick Start on a New Replit Account
 
