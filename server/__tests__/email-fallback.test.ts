@@ -1,24 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  gmailSend: vi.fn(),
+  gmailProxy: vi.fn(),
   updateTicketEmailDelivery: vi.fn(),
   listEventDateNames: vi.fn(),
 }));
 
-vi.mock("googleapis", () => ({
-  google: {
-    auth: {
-      OAuth2: class {
-        setCredentials() {}
-      },
-    },
-    gmail: () => ({
-      users: {
-        messages: { send: mocks.gmailSend },
-        getProfile: vi.fn(),
-      },
-    }),
+vi.mock("@replit/connectors-sdk", () => ({
+  ReplitConnectors: class {
+    proxy(...args: unknown[]) {
+      return mocks.gmailProxy(...args);
+    }
   },
 }));
 
@@ -60,6 +52,7 @@ function jsonResponse(body: unknown, status = 200) {
 describe("ticket email provider fallback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.gmailProxy.mockReset();
     mocks.listEventDateNames.mockResolvedValue([]);
     process.env.RESEND_API_KEY = "test-resend-key";
     process.env.RESEND_FROM_EMAIL = "Matcha On Ice <tickets@example.com>";
@@ -80,9 +73,10 @@ describe("ticket email provider fallback", () => {
   });
 
   it("uses Resend once when Gmail is unavailable", async () => {
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ items: [] }))
-      .mockResolvedValueOnce(jsonResponse({ id: "resend-fallback" })));
+    mocks.gmailProxy
+      .mockResolvedValueOnce(jsonResponse({ message: "Gmail not connected" }, 401))
+      .mockRejectedValueOnce(new Error("Gmail not connected"));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse({ id: "resend-fallback" })));
     const { sendTicketEmail } = await import("../emailService");
 
     const result = await sendTicketEmail({ ticket, event });
@@ -97,9 +91,10 @@ describe("ticket email provider fallback", () => {
   });
 
   it("reports both provider errors when neither can deliver", async () => {
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ items: [] }))
-      .mockResolvedValueOnce(jsonResponse({ message: "sender rejected" }, 403)));
+    mocks.gmailProxy
+      .mockResolvedValueOnce(jsonResponse({ message: "Gmail not connected" }, 401))
+      .mockRejectedValueOnce(new Error("Gmail not connected"));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse({ message: "sender rejected" }, 403)));
     const { sendTicketEmail } = await import("../emailService");
 
     const result = await sendTicketEmail({ ticket, event });
@@ -112,16 +107,12 @@ describe("ticket email provider fallback", () => {
 
   it("does not risk a duplicate Resend delivery after an ambiguous Gmail timeout", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
-      items: [{
-        settings: {
-          access_token: "gmail-test-token",
-          expires_at: "2099-01-01T00:00:00.000Z",
-          email: "sender@example.com",
-        },
-      }],
+      id: "should-not-be-used",
     }));
+    mocks.gmailProxy
+      .mockResolvedValueOnce(jsonResponse({ emailAddress: "sender@example.com" }))
+      .mockRejectedValueOnce(new Error("socket timeout after request"));
     vi.stubGlobal("fetch", fetchMock);
-    mocks.gmailSend.mockRejectedValueOnce(new Error("socket timeout after request"));
     const { sendTicketEmail } = await import("../emailService");
 
     const result = await sendTicketEmail({ ticket, event });
@@ -129,7 +120,7 @@ describe("ticket email provider fallback", () => {
     expect(result.success).toBe(false);
     expect(result.fallbackUsed).toBe(false);
     expect(result.error).toContain("outcome uncertain");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.updateTicketEmailDelivery).toHaveBeenCalledWith(
       ticket.id,
       expect.objectContaining({ emailDeliveryStatus: "unknown" }),
