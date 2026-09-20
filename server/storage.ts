@@ -82,7 +82,6 @@ export interface IStorage {
   getCustomerByEmail(email: string): Promise<Customer | undefined>;
   listCustomers(): Promise<Customer[]>;
 
-  updateEvent(id: string, data: Partial<InsertEvent>): Promise<Event | undefined>;
   deleteEvent(id: string): Promise<boolean>;
   reassignTickets(fromEventId: string, toEventId: string): Promise<number>;
   updateTicketTypeByEvent(eventId: string, ticketType: string): Promise<number>;

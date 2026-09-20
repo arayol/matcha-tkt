@@ -818,7 +818,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    const ids = Array.from(selectedIds);
+                    const ids = [...selectedIds];
                     const selected = divergences.filter(d => ids.includes(d.id));
                     const csvOnly = selected.filter(d => d.type === "missing_in_stripe" && d.source === "csv");
                     if (csvOnly.length > 0) {
@@ -837,7 +837,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
                 <Button
                   size="sm"
                   variant="destructive"
-                  onClick={() => applyMutation.mutate({ action: "delete", ids: Array.from(selectedIds) })}
+                  onClick={() => applyMutation.mutate({ action: "delete", ids: [...selectedIds] })}
                   disabled={applyMutation.isPending}
                   data-testid="button-bulk-delete"
                 >
@@ -1391,7 +1391,7 @@ export default function ReconciliationPage({ dark, toggleTheme, onLogout, user }
             <Button variant="ghost" onClick={() => setShowSplitDialog(false)}>Cancel</Button>
             <Button
               disabled={splitSelectedTickets.size === 0 || !splitTargetEventId || moveTicketsMutation.isPending}
-              onClick={() => moveTicketsMutation.mutate({ ticketIds: Array.from(splitSelectedTickets), targetEventId: splitTargetEventId })}
+              onClick={() => moveTicketsMutation.mutate({ ticketIds: [...splitSelectedTickets], targetEventId: splitTargetEventId })}
               data-testid="button-confirm-split"
             >
               {moveTicketsMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}

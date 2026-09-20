@@ -65,8 +65,6 @@ const campaignContactSchema = z.object({
 });
 const campaignContactsSchema = z.array(campaignContactSchema).min(1).max(10000);
 
-function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
-
 const REPLY_POLL_INTERVAL_MS = 5 * 60 * 1000;
 let replyPollerStarted = false;
 function startReplyPoller() {
@@ -125,7 +123,7 @@ async function processCampaignSends(campaignId: string) {
     const sentNow = await storage.countCampaignRecipientsByStatus(campaignId, "sent");
     const failedNow = await storage.countCampaignRecipientsByStatus(campaignId, "failed");
     await storage.updateEmailCampaign(campaignId, { sentCount: sentNow, failedCount: failedNow });
-    await sleep(350);
+    await new Promise((r) => setTimeout(r, 350));
   }
   await storage.updateEmailCampaign(campaignId, { status: "completed", completedAt: new Date() });
 }

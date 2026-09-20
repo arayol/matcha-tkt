@@ -203,7 +203,7 @@ export default function EmailCampaignsPage({ dark, toggleTheme, onLogout, user }
   const effectiveContactsImported = contactsMode === "saved" ? savedSelected.length > 0 : contactsImported;
 
   const handlePdfsAdd = (fileList: FileList | File[]) => {
-    const incoming = Array.from(fileList);
+    const incoming = [...fileList];
     setPdfFiles(prev => {
       const existing = new Set(prev.map(f => f.name));
       const toAdd = incoming.filter(f => !existing.has(f.name));
